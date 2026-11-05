@@ -21,3 +21,6 @@ OLD_SCRIPTS_BACKUP/
 # Database backups
 *.backup
 *.dump
+
+# Keep local demo records private
+data/
