@@ -1,0 +1,23 @@
+
+# Compiled Java files
+out/
+*.class
+
+# Sensitive credentials
+.env
+.env.*
+client_secret*.json
+oauth-credentials.json
+SAKA-SMART-OAuth.ps1
+*.pem
+*.key
+
+# Local VS Code settings
+.vscode/
+
+# Backup scripts
+OLD_SCRIPTS_BACKUP/
+
+# Database backups
+*.backup
+*.dump
