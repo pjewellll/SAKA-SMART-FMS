@@ -1197,7 +1197,9 @@ public final class Main {
             "FARM_OWNER".equals(role())?new String[]{"Dashboard","Inventory","Calendar","Production Tracking","Accounting","Marketplace / Sales","Farm Members","Learning Center","Settings"}:
             new String[]{"Dashboard","Inventory","Calendar","Production Tracking","Accounting","Marketplace / Sales","Learning Center","Settings"};
         for(String r:routes) {
-            JButton b=btn(symbol(r)+"  "+r,r.equals(route)?GREEN:DARK);b.setHorizontalAlignment(SwingConstants.LEFT);
+            JButton b="Dashboard".equals(route)?new DashboardNavButton(r,r.equals(route)):
+                btn(symbol(r)+"  "+r,r.equals(route)?GREEN:DARK);
+            b.setHorizontalAlignment(SwingConstants.LEFT);
             b.setMaximumSize(new Dimension(Integer.MAX_VALUE,47));b.setPreferredSize(new Dimension(210,45));b.setAlignmentX(Component.LEFT_ALIGNMENT);
             b.addActionListener(e->{route=r;showShell();});sidebar.add(b);sidebar.add(spacer(7));
         }
@@ -1224,9 +1226,12 @@ public final class Main {
         title.add(label(admin()?"Manage users, records, and system settings.":"Smart farms. Brighter tomorrows.",15,false,DARK));top.add(title,BorderLayout.WEST);
         JPanel right=pane(new FlowLayout(FlowLayout.RIGHT,7,0));
         JLabel mode=label(store.mode().startsWith("POSTGRESQL")?"● PostgreSQL connected":"● Local demo",12,true,GREEN);right.add(mode);
-        JButton alerts=secondary("🔔 Alerts");alerts.addActionListener(e->notifications());right.add(alerts);
-        JButton refresh=secondary("↻ Refresh");refresh.addActionListener(e->renderPage());right.add(refresh);
-        JButton logout=secondary("Log Out");logout.addActionListener(e->{store.log(username(),"Signed out");user=null;store=backend;showLogin();});right.add(logout);
+        JButton alerts="Dashboard".equals(route)?dashboardButton("Alerts"):secondary("🔔 Alerts");
+        alerts.addActionListener(e->notifications());right.add(alerts);
+        JButton refresh="Dashboard".equals(route)?dashboardButton("Refresh"):secondary("↻ Refresh");
+        refresh.addActionListener(e->renderPage());right.add(refresh);
+        JButton logout="Dashboard".equals(route)?dashboardButton("Log Out"):secondary("Log Out");
+        logout.addActionListener(e->{store.log(username(),"Signed out");user=null;store=backend;showLogin();});right.add(logout);
         JPanel topRight=pane(new BorderLayout());topRight.add(right,BorderLayout.NORTH);topRight.add(label(user.getOrDefault("full_name",username())+"  •  "+role().replace('_',' '),12,true,DARK),BorderLayout.SOUTH);
         top.add(topRight,BorderLayout.EAST);return top;
     }
@@ -1468,6 +1473,199 @@ public final class Main {
             }
             if(lightHeader){a.setPaint(new GradientPaint(0,0,new Color(246,252,248,240),0,110,new Color(250,254,251,190)));a.fillRoundRect(0,0,w,115,0,0);}
             a.dispose();super.paintComponent(g);
+        }
+    }
+    // DASHBOARD V2 - Visual polish only. Existing records, routes, and login logic remain intact.
+    // These styles are intentionally used only by DashboardPage and the Dashboard navigation.
+    private static final class DashboardGlass extends JPanel {
+        private final Color tint;
+        private final boolean compact;
+        private boolean hovered;
+        DashboardGlass(LayoutManager layout,Color tint,boolean compact){
+            super(layout);this.tint=tint;this.compact=compact;setOpaque(false);
+            addMouseListener(new MouseAdapter(){
+                @Override public void mouseEntered(MouseEvent e){hovered=true;repaint();}
+                @Override public void mouseExited(MouseEvent e){hovered=false;repaint();}
+            });
+        }
+        @Override protected void paintComponent(Graphics original){
+            super.paintComponent(original);
+            Graphics2D g=(Graphics2D)original.create();
+            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON);
+            int w=getWidth(),h=getHeight();if(w<32||h<32){g.dispose();return;}
+            int x=3,y=3,bw=w-9,bh=h-13,arc=compact?23:25;
+            // Cast shadow, a dark lower bevel, then the raised tinted surface.
+            g.setColor(new Color(12,69,40,14));g.fillRoundRect(x+5,y+7,bw,bh,arc,arc);
+            g.setColor(new Color(8,58,39,25));g.fillRoundRect(x+2,y+5,bw,bh,arc,arc);
+            Color base=tint;
+            Color top=mix(base,Color.WHITE,compact?.48f:.70f);
+            Color bottom=mix(base,new Color(73,146,103),compact?.14f:.065f);
+            if(hovered){top=mix(top,Color.WHITE,.24f);bottom=mix(bottom,Color.WHITE,.10f);}
+            g.setPaint(new GradientPaint(x,y,top,x+bw*.24f,y+bh,bottom));
+            g.fillRoundRect(x,y,bw,bh,arc,arc);
+            Shape clip=g.getClip();g.clip(new RoundRectangle2D.Double(x,y,bw,bh,arc,arc));
+            g.setPaint(new GradientPaint(x,y,new Color(255,255,255,115),x,y+Math.max(24,bh*.62f),new Color(255,255,255,0)));
+            g.fillRoundRect(x+3,y+2,bw-6,Math.max(18,bh/2),arc-4,arc-4);
+            g.setPaint(new RadialGradientPaint(new Point2D.Float(x+bw*.10f,y+7),Math.max(45,bw*.53f),
+                new float[]{0f,1f},new Color[]{new Color(255,255,240,52),new Color(255,255,255,0)}));
+            g.fillRect(x,y,bw,bh);
+            g.setClip(clip);
+            g.setStroke(new BasicStroke(1.5f));g.setColor(new Color(255,255,255,205));
+            g.drawRoundRect(x+1,y+1,bw-2,bh-2,arc,arc);
+            g.setStroke(new BasicStroke(1.0f));g.setColor(new Color(29,101,62,65));
+            g.drawRoundRect(x+3,y+3,bw-6,bh-6,arc-5,arc-5);
+            g.dispose();
+        }
+    }
+    private static Color mix(Color a,Color b,float f){
+        f=Math.max(0f,Math.min(1f,f));
+        return new Color((int)(a.getRed()*(1-f)+b.getRed()*f),
+            (int)(a.getGreen()*(1-f)+b.getGreen()*f),
+            (int)(a.getBlue()*(1-f)+b.getBlue()*f));
+    }
+    static JComponent dashboardStat(String name,String value,String detail,Color tint,String glyph){
+        JPanel p=new DashboardGlass(new BorderLayout(7,3),tint,true);
+        p.setBorder(new EmptyBorder(15,18,19,19));
+        JPanel words=pane(new GridLayout(3,1,0,2));
+        words.add(label(name,13,true,TEXT));
+        words.add(label(value,25,true,DARK));
+        words.add(label(detail,11,false,MUTED));
+        p.add(words,BorderLayout.CENTER);
+        JComponent symbol=new DashboardStatGlyph(name,glyph);
+        symbol.setPreferredSize(new Dimension(43,52));
+        p.add(symbol,BorderLayout.EAST);
+        return p;
+    }
+    static JComponent dashboardSection(String name,String subtitle,JComponent contents){
+        JPanel p=new DashboardGlass(new BorderLayout(0,12),new Color(248,252,246),false);
+        p.setBorder(new EmptyBorder(18,21,21,21));
+        JPanel head=pane(new GridLayout(subtitle.isBlank()?1:2,1,0,2));
+        head.add(label(name,18,true,DARK));
+        if(!subtitle.isBlank())head.add(label(subtitle,12,false,MUTED));
+        p.add(head,BorderLayout.NORTH);p.add(contents,BorderLayout.CENTER);
+        return p;
+    }
+    static JComponent dashboardTip(String name,String desc){
+        JPanel p=new DashboardGlass(new BorderLayout(),new Color(238,250,218),false);
+        p.setBorder(new EmptyBorder(19,22,21,22));
+        p.add(label(name,18,true,DARK),BorderLayout.NORTH);
+        p.add(label(desc,13,false,MUTED),BorderLayout.CENTER);
+        return p;
+    }
+    static JScrollPane dashboardTable(String table,List<Map<String,String>> rows,List<String> cols){
+        TableParts parts=tableView(table,rows,cols,null);
+        JTable t=parts.table();
+        t.setAutoResizeMode(JTable.AUTO_RESIZE_ALL_COLUMNS);
+        t.setRowHeight(32);
+        t.setShowHorizontalLines(true);t.setShowVerticalLines(false);
+        t.setBackground(new Color(251,254,250));
+        t.setSelectionBackground(new Color(219,246,220));
+        t.setGridColor(new Color(222,238,225));
+        t.getTableHeader().setFont(new Font("Segoe UI",Font.BOLD,12));
+        t.getTableHeader().setBackground(new Color(228,243,230));
+        t.getTableHeader().setForeground(DARK);
+        for(int i=0;i<t.getColumnCount();i++)t.getColumnModel().getColumn(i).setPreferredWidth(95);
+        JScrollPane scroll=parts.scroll();
+        scroll.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        scroll.getViewport().setBackground(new Color(251,254,250));
+        return scroll;
+    }
+    static JButton dashboardButton(String text){
+        JButton b=new JButton(text){
+            @Override protected void paintComponent(Graphics source){
+                Graphics2D g=(Graphics2D)source.create();
+                g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON);
+                int w=getWidth(),h=getHeight();
+                Color upper=getModel().isPressed()?new Color(24,113,58):getModel().isRollover()?new Color(62,182,91):new Color(42,151,75);
+                g.setColor(new Color(5,52,31,90));g.fillRoundRect(1,5,w-2,h-6,15,15);
+                g.setPaint(new GradientPaint(1,1,upper,1,h-5,new Color(8,79,42)));
+                g.fillRoundRect(1,1,w-2,h-6,15,15);
+                g.setPaint(new GradientPaint(0,0,new Color(255,255,255,125),0,h*.58f,new Color(255,255,255,0)));
+                g.fillRoundRect(3,2,w-6,(int)(h*.51),13,13);
+                g.setColor(new Color(246,255,243,175));g.drawRoundRect(2,2,w-5,h-8,14,14);
+                g.dispose();super.paintComponent(source);
+            }
+        };
+        b.setForeground(Color.WHITE);b.setFont(new Font("Segoe UI",Font.BOLD,12));
+        b.setContentAreaFilled(false);b.setFocusPainted(false);b.setBorderPainted(false);
+        b.setOpaque(false);b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        b.setBorder(new EmptyBorder(10,17,13,17));
+        return b;
+    }
+    private static final class DashboardStatGlyph extends JComponent {
+        private final String title,glyph;
+        DashboardStatGlyph(String title,String glyph){this.title=title;this.glyph=glyph;setOpaque(false);}
+        @Override protected void paintComponent(Graphics original){
+            Graphics2D g=(Graphics2D)original.create();
+            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON);
+            int w=getWidth(),h=getHeight(),x=w/2,y=h/2;
+            g.setColor(new Color(18,116,66,24));g.fillOval(x-20,y-20,40,40);
+            g.setColor(new Color(7,114,55));g.setStroke(new BasicStroke(2.5f,BasicStroke.CAP_ROUND,BasicStroke.JOIN_ROUND));
+            if(title.contains("Inventory")||title.contains("Stock" )&& !title.contains("Low")){
+                g.drawRect(x-11,y-7,22,18);g.drawLine(x-11,y-7,x,y-14);g.drawLine(x,y-14,x+11,y-7);g.drawLine(x,y-14,x,y+11);
+            }else if(title.contains("Tasks")||title.contains("Upcoming")){
+                g.drawRoundRect(x-12,y-11,24,23,5,5);g.drawLine(x-12,y-3,x+12,y-3);
+                g.drawLine(x-6,y-14,x-6,y-8);g.drawLine(x+6,y-14,x+6,y-8);
+                g.fillOval(x-5,y+2,4,4);g.fillOval(x+3,y+2,4,4);
+            }else if(title.contains("Income")){
+                g.setFont(new Font("Segoe UI",Font.BOLD,29));g.drawString("₱",x-10,y+10);
+            }else if(title.contains("Low")||title.contains("Pending")){
+                g.drawOval(x-13,y-13,26,26);g.drawLine(x,y-7,x,y+3);g.fillOval(x-2,y+7,4,4);
+            }else{
+                g.setFont(new Font("Segoe UI",Font.BOLD,28));
+                String mark=glyph.matches("[\u0021-\u007e]")?glyph:"✓";
+                FontMetrics fm=g.getFontMetrics();g.drawString(mark,x-fm.stringWidth(mark)/2,y+10);
+            }
+            g.dispose();
+        }
+    }
+    private static final class DashboardNavButton extends JButton {
+        private final boolean selected;
+        DashboardNavButton(String route,boolean selected){
+            super(route);this.selected=selected;
+            setForeground(Color.WHITE);setFont(new Font("Segoe UI",Font.BOLD,13));
+            setIcon(new DashboardNavIcon(route));setIconTextGap(10);
+            setBorder(new EmptyBorder(8,15,10,7));setOpaque(false);
+            setContentAreaFilled(false);setBorderPainted(false);setFocusPainted(false);
+            setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            setRolloverEnabled(true);
+        }
+        @Override protected void paintComponent(Graphics source){
+            Graphics2D g=(Graphics2D)source.create();
+            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON);
+            int w=getWidth(),h=getHeight();
+            boolean bright=selected||getModel().isRollover();
+            g.setColor(new Color(0,28,18,100));g.fillRoundRect(1,5,w-2,h-6,15,15);
+            g.setPaint(new GradientPaint(0,0,bright?new Color(36,172,83):new Color(10,81,45),
+               w,h,bright?new Color(9,113,54):new Color(5,62,35)));
+            g.fillRoundRect(1,1,w-2,h-7,15,15);
+            if(bright){g.setPaint(new GradientPaint(0,0,new Color(255,255,255,96),0,h*.7f,new Color(255,255,255,0)));
+                g.fillRoundRect(3,2,w-6,h/2,13,13);}
+            g.setColor(new Color(188,255,211,selected?150:55));g.drawRoundRect(1,1,w-3,h-8,15,15);
+            g.dispose();super.paintComponent(source);
+        }
+    }
+    private static final class DashboardNavIcon implements javax.swing.Icon {
+        private final String route;
+        DashboardNavIcon(String route){this.route=route;}
+        public int getIconWidth(){return 19;}public int getIconHeight(){return 19;}
+        public void paintIcon(Component c,Graphics gr,int x,int y){
+            Graphics2D g=(Graphics2D)gr.create();g.translate(x,y);
+            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON);
+            g.setColor(new Color(237,255,235));g.setStroke(new BasicStroke(1.7f,BasicStroke.CAP_ROUND,BasicStroke.JOIN_ROUND));
+            switch(route){
+                case "Dashboard" -> {g.drawRoundRect(2,2,6,6,2,2);g.drawRoundRect(11,2,6,6,2,2);g.drawRoundRect(2,11,6,6,2,2);g.drawRoundRect(11,11,6,6,2,2);}
+                case "Calendar" -> {g.drawRoundRect(2,4,15,13,2,2);g.drawLine(2,8,17,8);g.drawLine(6,2,6,6);g.drawLine(13,2,13,6);}
+                case "Inventory","Marketplace / Sales" -> {g.drawRect(3,6,13,10);g.drawLine(3,6,9,2);g.drawLine(9,2,16,6);g.drawLine(9,2,9,15);}
+                case "Accounting" -> {g.setFont(new Font("Segoe UI",Font.BOLD,17));g.drawString("₱",5,16);}
+                case "Production Tracking" -> {g.drawLine(3,16,3,9);g.drawLine(8,16,8,5);g.drawLine(13,16,13,2);g.drawLine(17,16,2,16);}
+                case "Learning Center" -> {g.drawRect(2,4,7,12);g.drawRect(10,4,7,12);g.drawLine(9,6,9,18);}
+                case "Farm Members","Users" -> {g.drawOval(7,2,5,5);g.drawOval(2,7,5,5);g.drawOval(12,7,5,5);g.drawRoundRect(4,10,11,7,4,4);}
+                case "Settings" -> {g.drawOval(5,5,9,9);g.drawOval(8,8,3,3);g.drawLine(9,2,9,5);g.drawLine(9,14,9,17);g.drawLine(2,9,5,9);g.drawLine(14,9,17,9);}
+                default -> {g.drawRoundRect(2,3,15,13,3,3);g.drawLine(5,8,14,8);g.drawLine(5,12,11,12);}
+            }
+            g.dispose();
         }
     }
     static class ChartPanel extends JPanel {
