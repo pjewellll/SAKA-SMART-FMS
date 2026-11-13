@@ -36,6 +36,8 @@ public final class PostgresStorage implements Storage {
             st.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT");
             st.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_verified BOOLEAN DEFAULT FALSE");
             st.execute("ALTER TABLE logs ADD COLUMN IF NOT EXISTS farm_id BIGINT REFERENCES farms(id)");
+            st.execute("ALTER TABLE farms ADD COLUMN IF NOT EXISTS latitude TEXT");
+            st.execute("ALTER TABLE farms ADD COLUMN IF NOT EXISTS longitude TEXT");
             st.execute("CREATE UNIQUE INDEX IF NOT EXISTS saka_social_subject_uniq ON social_identities(provider,subject)");
         }
         try(Statement st=c.createStatement();ResultSet rs=st.executeQuery("SELECT COUNT(*) FROM users")){

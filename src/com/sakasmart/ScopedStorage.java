@@ -30,7 +30,7 @@ final class ScopedStorage implements Storage {
     private boolean ownFarm(Map<String,String> r){return farmId.equals(r.getOrDefault("farm_id",""));}
     private Map<String,String> checkedRecord(String table,String id) throws Exception {
         Map<String,String> r=delegate.byId(table,id);
-        require(r!=null && (systemAdmin||ownFarm(r)));
+        require(r != null && (systemAdmin || ("farms".equals(table) ? farmId.equals(r.get("id")) : ownFarm(r))));
         return r;
     }
     @Override public List<Map<String,String>> all(String table) throws Exception {
@@ -51,6 +51,7 @@ final class ScopedStorage implements Storage {
             }
             return visible;
         }
+        if("farms".equals(table))return all.stream().filter(row -> farmId.equals(row.get("id"))).toList();
         if(FARM_DATA.contains(table))return all.stream().filter(this::ownFarm).toList();
         throw new SecurityException("Unauthorized data category.");
     }

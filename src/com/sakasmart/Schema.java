@@ -26,6 +26,8 @@ public final class Schema {
         def("farms", "Farm Profiles",
             new Field("name", "Farm Name", Type.TEXT, true),
             new Field("location", "Location", Type.TEXT, true),
+            new Field("latitude", "Latitude", Type.TEXT, false),
+            new Field("longitude", "Longitude", Type.TEXT, false),
             new Field("owner", "Owner", Type.TEXT, true),
             new Field("area_ha", "Area (hectares)", Type.NUMBER, true),
             new Field("crops", "Crop Categories", Type.TEXT, false),

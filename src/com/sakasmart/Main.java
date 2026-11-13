@@ -1,13 +1,6 @@
 package com.sakasmart;
 
-import javax.swing.*;
-import javax.swing.border.*;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
-import javax.swing.table.*;
-
 import com.sakasmart.Main.RoundedPanel;
-
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.geom.*;
@@ -15,11 +8,15 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.time.*;
-import java.time.format.*;
 import java.util.*;
 import java.util.List;
 import java.util.function.*;
 import java.util.zip.*;
+import javax.swing.*;
+import javax.swing.border.*;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+import javax.swing.table.*;
 
 /** SAKA-SMART -- Java 21, no third-party UI libraries. */
 public final class Main {
@@ -419,6 +416,7 @@ public final class Main {
         card.add(new RiseReveal(footer,loginMotion,1.06),BorderLayout.SOUTH);
 
         enter.addActionListener(e->{
+            System.out.println("[SAKA-SMART] LOG IN BUTTON CLICKED");
             String login=usernameField.getText().trim();char[] pw=passwordField.getPassword();
             try{
                 Map<String,String> matched=null;
@@ -1220,21 +1218,336 @@ public final class Main {
         case "Accounting"->"₱";case "Marketplace / Sales"->"▤";case "Learning Center"->"▧";
         case "Users"->"♟";case "Farm Members"->"♟";case "Settings"->"⚙";case "Backup & Restore"->"↥";
         case "Farm Profile"->"♣";case "System Records"->"≡";default->"•";};}
-    private JComponent header(){
-        JPanel top=new FarmBanner(false,true);top.setPreferredSize(new Dimension(800,139));top.setLayout(new BorderLayout());pad(top,21,25,20,25);
-        JPanel title=pane(new GridLayout(2,1,0,0));title.add(label(admin()?"ADMIN CONTROL CENTER":"SAKA-SMART  •  "+route.toUpperCase(),25,true,DARK));
-        title.add(label(admin()?"Manage users, records, and system settings.":"Smart farms. Brighter tomorrows.",15,false,DARK));top.add(title,BorderLayout.WEST);
-        JPanel right=pane(new FlowLayout(FlowLayout.RIGHT,7,0));
-        JLabel mode=label(store.mode().startsWith("POSTGRESQL")?"● PostgreSQL connected":"● Local demo",12,true,GREEN);right.add(mode);
-        JButton alerts="Dashboard".equals(route)?dashboardButton("Alerts"):secondary("🔔 Alerts");
-        alerts.addActionListener(e->notifications());right.add(alerts);
-        JButton refresh="Dashboard".equals(route)?dashboardButton("Refresh"):secondary("↻ Refresh");
-        refresh.addActionListener(e->renderPage());right.add(refresh);
-        JButton logout="Dashboard".equals(route)?dashboardButton("Log Out"):secondary("Log Out");
-        logout.addActionListener(e->{store.log(username(),"Signed out");user=null;store=backend;showLogin();});right.add(logout);
-        JPanel topRight=pane(new BorderLayout());topRight.add(right,BorderLayout.NORTH);topRight.add(label(user.getOrDefault("full_name",username())+"  •  "+role().replace('_',' '),12,true,DARK),BorderLayout.SOUTH);
-        top.add(topRight,BorderLayout.EAST);return top;
+
+
+private JComponent header() {
+    final Color titleGreen = new Color(7, 78, 45);
+    final Color subGreen = new Color(75, 112, 83);
+
+    // Compact, softly illustrated header.
+    JPanel top = new JPanel(new BorderLayout(20, 0)) {
+        @Override
+        protected void paintComponent(Graphics original) {
+            super.paintComponent(original);
+            Graphics2D g = (Graphics2D) original.create();
+            g.setRenderingHint(
+                RenderingHints.KEY_ANTIALIASING,
+                RenderingHints.VALUE_ANTIALIAS_ON
+            );
+
+            int w = getWidth();
+            int h = getHeight();
+
+            g.setPaint(new GradientPaint(
+                0, 0, new Color(250, 254, 250),
+                0, h, new Color(225, 242, 227)
+            ));
+            g.fillRect(0, 0, w, h);
+
+            // Subtle farming landscape.
+            Path2D.Double field = new Path2D.Double();
+            field.moveTo(0, h);
+            field.lineTo(0, h - 20);
+            field.curveTo(
+                w * 0.25, h - 48,
+                w * 0.54, h - 12,
+                w, h - 35
+            );
+            field.lineTo(w, h);
+            field.closePath();
+
+            g.setColor(new Color(73, 153, 96, 16));
+            g.fill(field);
+
+            // Bottom emerald accent.
+            g.setPaint(new GradientPaint(
+                0, h - 5, new Color(30, 119, 65),
+                w, h - 5, new Color(125, 191, 83)
+            ));
+            g.fillRect(0, h - 5, w, 5);
+
+            g.dispose();
+        }
+    };
+
+    top.setOpaque(false);
+    top.setPreferredSize(new Dimension(800, 120));
+    top.setBorder(new EmptyBorder(16, 29, 16, 29));
+
+    // LEFT: Branding and current page title.
+    JPanel left = pane(new BorderLayout(0, 3));
+    JPanel headings = pane(new GridLayout(2, 1, 0, 0));
+
+    headings.add(label(
+        "SAKA-SMART  /  FARM MANAGEMENT SYSTEM",
+        10, true, new Color(49, 128, 76)
+    ));
+
+    headings.add(label(
+        admin()
+            ? "Admin Control Center"
+            : ("Dashboard".equals(route)
+                ? "Dashboard Overview"
+                : route),
+        24, true, titleGreen
+    ));
+
+    left.add(headings, BorderLayout.CENTER);
+    left.add(label(
+        admin()
+            ? "Manage users, records, and system settings."
+            : "Smart farms. Brighter tomorrows.",
+        12, false, subGreen
+    ), BorderLayout.SOUTH);
+
+    top.add(left, BorderLayout.WEST);
+
+    // RIGHT: Profile avatar and user information.
+    String fullName = user.getOrDefault(
+        "full_name", username()
+    );
+
+    if (fullName == null || fullName.isBlank()) {
+        fullName = username();
     }
+
+    JPanel profile = pane(new BorderLayout(9, 0));
+
+    JComponent avatar = new JComponent() {
+        @Override
+        protected void paintComponent(Graphics original) {
+            Graphics2D g = (Graphics2D) original.create();
+            g.setRenderingHint(
+                RenderingHints.KEY_ANTIALIASING,
+                RenderingHints.VALUE_ANTIALIAS_ON
+            );
+
+            int w = getWidth();
+            int h = getHeight();
+
+            g.setPaint(new GradientPaint(
+                0, 0, new Color(47, 160, 95),
+                0, h, new Color(7, 91, 53)
+            ));
+            g.fillOval(1, 1, w - 2, h - 2);
+
+            g.setColor(new Color(255, 255, 255, 185));
+            g.setStroke(new BasicStroke(1.3f));
+            g.drawOval(2, 2, w - 5, h - 5);
+
+            // White human silhouette.
+            g.setColor(Color.WHITE);
+            g.fillOval(w / 2 - 6, h / 2 - 11, 12, 12);
+            g.fillRoundRect(
+                w / 2 - 13,
+                h / 2 + 3,
+                26,
+                15,
+                16,
+                16
+            );
+
+
+            g.dispose();
+        }
+    };
+
+    avatar.setPreferredSize(new Dimension(42, 42));
+    avatar.setToolTipText("User profile");
+
+    profile.add(avatar, BorderLayout.EAST);
+
+    JPanel userInfo = pane(new GridLayout(2, 1, 0, 1));
+
+    JLabel nameLabel = label(
+        fullName, 13, true, titleGreen
+    );
+    nameLabel.setPreferredSize(new Dimension(155, 20));
+    nameLabel.setToolTipText(fullName);
+
+    userInfo.add(nameLabel);
+    userInfo.add(label(
+        role().replace('_', ' '),
+        11, false, subGreen
+    ));
+
+    profile.add(userInfo, BorderLayout.WEST);
+
+    // Count active alerts using the existing alert rules.
+    int count = 0;
+
+    for (Map<String, String> r : rows("inventory")) {
+        if (Storage.num(r, "quantity")
+                <= Storage.num(r, "min_stock")) {
+            count++;
+        }
+        if (isExpiring(r)) {
+            count++;
+        }
+    }
+
+    for (Map<String, String> r : rows("events")) {
+        if ("Upcoming".equals(v(r, "status"))
+                && v(r, "date").compareTo(today()) <= 0) {
+            count++;
+        }
+    }
+
+    if (admin()) {
+        for (Map<String, String> r : rows("users")) {
+            if (!"true".equalsIgnoreCase(v(r, "active"))) {
+                count++;
+            }
+        }
+        for (Map<String, String> r :
+                rows("password_reset_requests")) {
+            if ("PENDING".equals(v(r, "status"))) {
+                count++;
+            }
+        }
+    }
+
+    final int alertCount = count;
+
+    // NOTIFICATION BELL with active-alert badge.
+    JButton notificationsButton = new JButton() {
+        @Override
+        protected void paintComponent(Graphics original) {
+            Graphics2D g = (Graphics2D) original.create();
+            g.setRenderingHint(
+                RenderingHints.KEY_ANTIALIASING,
+                RenderingHints.VALUE_ANTIALIAS_ON
+            );
+
+            int w = getWidth();
+            int h = getHeight();
+
+            g.setColor(
+                getModel().isRollover()
+                    ? new Color(224, 243, 228)
+                    : new Color(250, 255, 251)
+            );
+            g.fillRoundRect(
+                1, 1, w - 3, h - 3, 15, 15
+            );
+
+            g.setColor(new Color(165, 203, 176));
+            g.setStroke(new BasicStroke(1.2f));
+            g.drawRoundRect(
+                1, 1, w - 3, h - 3, 15, 15
+            );
+
+            int cx = w / 2;
+            int cy = h / 2;
+
+            Path2D.Double bell = new Path2D.Double();
+            bell.moveTo(cx - 10, cy + 6);
+            bell.curveTo(
+                cx - 5, cy + 1,
+                cx - 9, cy - 11,
+                cx, cy - 11
+            );
+            bell.curveTo(
+                cx + 9, cy - 11,
+                cx + 5, cy + 1,
+                cx + 10, cy + 6
+            );
+            bell.closePath();
+
+            g.setColor(new Color(22, 105, 59));
+            g.setStroke(new BasicStroke(
+                1.8f,
+                BasicStroke.CAP_ROUND,
+                BasicStroke.JOIN_ROUND
+            ));
+            g.draw(bell);
+            g.fillOval(cx - 2, cy + 8, 4, 4);
+
+            if (alertCount > 0) {
+                String badge = alertCount > 9
+                    ? "9+"
+                    : Integer.toString(alertCount);
+
+                g.setColor(new Color(215, 57, 70));
+                g.fillOval(w - 21, 0, 19, 19);
+
+                g.setColor(Color.WHITE);
+                g.setFont(new Font(
+                    "Segoe UI", Font.BOLD, 10
+                ));
+
+                FontMetrics fm = g.getFontMetrics();
+                g.drawString(
+                    badge,
+                    w - 21
+                        + (19 - fm.stringWidth(badge)) / 2,
+                    13
+                );
+            }
+
+            g.dispose();
+        }
+    };
+
+    notificationsButton.setPreferredSize(
+        new Dimension(46, 43)
+    );
+    notificationsButton.setContentAreaFilled(false);
+    notificationsButton.setBorderPainted(false);
+    notificationsButton.setFocusPainted(false);
+    notificationsButton.setCursor(
+        Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+    );
+    notificationsButton.setToolTipText(
+        "Notifications — " + alertCount + " active alerts"
+    );
+    notificationsButton.getAccessibleContext()
+        .setAccessibleName("Notifications");
+
+    notificationsButton.addActionListener(
+        e -> notifications()
+    );
+
+    // Preserve the existing Refresh action.
+    JButton refresh = dashboardButton("Refresh");
+    refresh.addActionListener(e -> renderPage());
+
+    // Preserve the existing secure logout flow.
+    JButton logout = dashboardButton("Log Out");
+    logout.addActionListener(e -> {
+        store.log(username(), "Signed out");
+        user = null;
+        store = backend;
+        showLogin();
+    });
+
+    JPanel toolbar = pane(
+        new FlowLayout(FlowLayout.RIGHT, 8, 0)
+    );
+
+    toolbar.add(notificationsButton);
+        toolbar.add(refresh);
+        toolbar.add(logout);
+        toolbar.add(profile);
+
+    JPanel right = pane(new BorderLayout(0, 3));
+    right.add(toolbar, BorderLayout.CENTER);
+
+    JLabel mode = label(
+        store.mode().startsWith("POSTGRESQL")
+            ? "● PostgreSQL connected"
+            : "● Local demo",
+        11, true, new Color(26, 131, 69)
+    );
+
+    mode.setHorizontalAlignment(SwingConstants.RIGHT);
+    right.add(mode, BorderLayout.SOUTH);
+
+    top.add(right, BorderLayout.EAST);
+
+    return top;
+}
+
     void renderPage(){
         pageHolder.removeAll();
         JPanel body=pane(new BorderLayout());body.setBackground(BG);pad(body,20,23,28,23);

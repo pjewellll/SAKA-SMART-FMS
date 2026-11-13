@@ -19,12 +19,12 @@ final class CalendarPage extends PageBase {
     CalendarPage(Main host) { super(host); }
     JComponent build(){
         JPanel p=stack();List<Map<String,String>> all=rows("events");
-        long overdue=all.stream().filter(x->"Upcoming".equals(v(x,"status"))&&v(x,"date").compareTo(today())<0).count();
+        long overdue = DashboardPriorityLists.overdueCount(all, LocalDate.now());
         long completed=all.stream().filter(x->"Completed".equals(v(x,"status"))).count();
         addBlock(p,horizontal(stat("Scheduled Tasks",String.valueOf(all.size()),"All farm events",LIGHT,"▦"),
             stat("Overdue Tasks",String.valueOf(overdue),"Still incomplete",new Color(255,237,233),"!"),
             stat("Completed Tasks",String.valueOf(completed),"Recorded as complete",new Color(232,240,253),"✓"),
-            stat("Upcoming Events",String.valueOf(filter(all,x->"Upcoming".equals(v(x,"status"))).size()),"Planned activities",new Color(255,244,223),"◷")),115);
+            stat("Upcoming Events",Long.toString(DashboardPriorityLists.upcomingCount(all, LocalDate.now())),"Planned activities",new Color(255,244,223),"◷")),115);
         JButton crop=btn("Crop Schedule",host.calendarLivestock?new Color(104,132,115):GREEN);
         JButton live=btn("Livestock Schedule",host.calendarLivestock?GREEN:new Color(104,132,115));
         crop.addActionListener(e->{host.calendarLivestock=false;renderPage();});live.addActionListener(e->{host.calendarLivestock=true;renderPage();});
@@ -60,6 +60,27 @@ final class CalendarPage extends PageBase {
         JPanel right=pane(new BorderLayout(0,10));
         right.add(section("Upcoming & Recorded Tasks","Select a row to edit or complete",tableView("events",upcoming,List.of("title","date","time","target","status"),null).scroll()),BorderLayout.CENTER);
         TableParts table=tableView("events",upcoming,List.of("id","title","kind","date","status","target"),null);
+        // Display-only urgency: never change persisted Upcoming / Completed / Cancelled values.
+        table.table().getColumnModel().getColumn(4).setCellRenderer(new DefaultTableCellRenderer() {
+            @Override public Component getTableCellRendererComponent(JTable t, Object value,
+                    boolean selected, boolean focused, int row, int column) {
+                super.getTableCellRendererComponent(t, value, selected, focused, row, column);
+                int index = t.convertRowIndexToModel(row);
+                if (index >= 0 && index < table.source().size()) {
+                    Map<String, String> event = table.source().get(index);
+                    String calculated = DashboardPriorityLists.displayEventStatus(event, LocalDate.now());
+                    setText(calculated);
+                    setToolTipText("Stored status: " + v(event, "status") + " | Date: " + v(event, "date"));
+                    if (!selected) {
+                        if ("OVERDUE".equals(calculated)) setForeground(new Color(159, 24, 43));
+                        else if ("DUE TODAY".equals(calculated) || "DUE SOON".equals(calculated))
+                            setForeground(new Color(139, 82, 7));
+                        else setForeground(new Color(10, 100, 51));
+                    }
+                }
+                return this;
+            }
+        });
         JPanel buttons=pane(new BorderLayout(0,7));buttons.add(table.scroll(),BorderLayout.CENTER);
         if(editable("events")){
             JButton edit=secondary("Edit Task"),done=btn("Mark Completed",GREEN),delete=btn("Delete",RED);
