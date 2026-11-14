@@ -150,18 +150,10 @@ public final class Main {
     static JPanel pane(LayoutManager layout){JPanel p=new JPanel(layout);p.setOpaque(false);return p;}
     static void pad(JComponent c,int t,int l,int b,int r){c.setBorder(new EmptyBorder(t,l,b,r));}
     static JButton btn(String s,Color color) {
-        JButton b=new JButton(s){
-            @Override protected void paintComponent(Graphics g){
-                Graphics2D x=(Graphics2D)g.create();x.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON);
-                x.setColor(getModel().isPressed()?color.darker():getModel().isRollover()?color.brighter():color);
-                x.fillRoundRect(0,0,getWidth(),getHeight(),14,14);x.dispose();super.paintComponent(g);
-            }
-        };
-        b.setForeground(Color.WHITE);b.setFont(BOLD);b.setContentAreaFilled(false);b.setBorderPainted(false);b.setFocusPainted(false);
-        b.setBorder(new EmptyBorder(9,16,9,16));b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));b.setOpaque(false);return b;
+        return GlossyTheme.button(s, color);
     }
     static JButton secondary(String text){
-        JButton b=btn(text,new Color(107,127,115));return b;
+        return GlossyTheme.secondary(text);
     }
     static class RoundedPanel extends JPanel {
         final Color color;final int arc;
@@ -171,7 +163,7 @@ public final class Main {
             x.setColor(color);x.fillRoundRect(0,0,getWidth(),getHeight(),arc,arc);x.dispose();super.paintComponent(g);
         }
     }
-    static JPanel card(LayoutManager l){return new RoundedPanel(new Color(253,255,244),22,l);}
+    static JPanel card(LayoutManager l){return GlossyTheme.card(l);}
     static JComponent spacer(int h){JPanel p=pane(new BorderLayout());p.setPreferredSize(new Dimension(1,h));p.setMaximumSize(new Dimension(Integer.MAX_VALUE,h));return p;}
     static void stretch(JComponent c){c.setAlignmentX(Component.LEFT_ALIGNMENT);c.setMaximumSize(new Dimension(Integer.MAX_VALUE,Short.MAX_VALUE));}
     static String today(){return LocalDate.now().toString();}
@@ -995,7 +987,7 @@ public final class Main {
         }catch(Exception e){error(e);}finally{Arrays.fill(first,'\0');Arrays.fill(second,'\0');}
     }
 
-    static void styleInput(JTextField tf){tf.setFont(FONT);tf.setPreferredSize(new Dimension(200,38));tf.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(new Color(200,217,205)),new EmptyBorder(8,12,8,12)));}
+    static void styleInput(JTextField tf){GlossyTheme.styleInput(tf);}
     static void styleToggle(AbstractButton b){b.setFont(BOLD);b.setFocusPainted(false);b.setBackground(new Color(221,242,228));b.setForeground(DARK);b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));}
     private void loginUser(Map<String,String> account){
         if(!Boolean.parseBoolean(account.getOrDefault("active","false"))){
@@ -1195,8 +1187,8 @@ public final class Main {
             "FARM_OWNER".equals(role())?new String[]{"Dashboard","Inventory","Calendar","Production Tracking","Accounting","Marketplace / Sales","Farm Members","Learning Center","Settings"}:
             new String[]{"Dashboard","Inventory","Calendar","Production Tracking","Accounting","Marketplace / Sales","Learning Center","Settings"};
         for(String r:routes) {
-            JButton b="Dashboard".equals(route)?new DashboardNavButton(r,r.equals(route)):
-                btn(symbol(r)+"  "+r,r.equals(route)?GREEN:DARK);
+            // Use the exact same Dashboard navigation controls on every route.
+            JButton b=new DashboardNavButton(r,r.equals(route));
             b.setHorizontalAlignment(SwingConstants.LEFT);
             b.setMaximumSize(new Dimension(Integer.MAX_VALUE,47));b.setPreferredSize(new Dimension(210,45));b.setAlignmentX(Component.LEFT_ALIGNMENT);
             b.addActionListener(e->{route=r;showShell();});sidebar.add(b);sidebar.add(spacer(7));
@@ -1210,6 +1202,7 @@ public final class Main {
         main.add(header(),BorderLayout.NORTH);
         pageHolder=pane(new BorderLayout());pageHolder.setBackground(BG);
         JScrollPane scroll=new JScrollPane(pageHolder);scroll.setBorder(null);scroll.getViewport().setBackground(BG);scroll.getVerticalScrollBar().setUnitIncrement(22);
+        GlossyTheme.styleScrollPane(scroll);
         main.add(scroll,BorderLayout.CENTER);root.add(main,BorderLayout.CENTER);
         frame.setContentPane(root);renderPage();frame.revalidate();frame.repaint();
     }
@@ -1577,19 +1570,27 @@ private JComponent header() {
         c.setAlignmentX(Component.LEFT_ALIGNMENT);c.setMaximumSize(new Dimension(Integer.MAX_VALUE,height));c.setPreferredSize(new Dimension(200,height));
         target.add(c);target.add(spacer(13));
     }
+    // Share Dashboard's actual glass, glyph and layered outline components across navigation pages.
+    // This is presentation-only; page logic, event handlers and storage calls are untouched.
     static JComponent stat(String title,String value,String detail,Color tint,String glyph){
-        JPanel p=new RoundedPanel(tint,20,new BorderLayout(8,4));pad(p,15,17,15,14);
-        JPanel group=pane(new GridLayout(3,1,0,1));group.add(label(title,13,true,TEXT));group.add(label(value,26,true,DARK));group.add(label(detail,11,false,MUTED));
-        p.add(group,BorderLayout.CENTER);p.add(label(glyph,35,true,GREEN),BorderLayout.EAST);return p;
+        Color shell=GlossyTheme.statShell(title,tint);
+        Color outline=GlossyTheme.statOutline(title);
+        return GlossyTheme.outlined(dashboardStat(title,value,detail,tint,glyph),
+            shell,outline,GlossyTheme.isCriticalStat(title)?2:1,30);
     }
     static JComponent section(String title,String subtitle,JComponent contents){
-        JPanel p=card(new BorderLayout(0,12));pad(p,16,17,16,17);
-        JPanel head=pane(new GridLayout(subtitle.isBlank()?1:2,1,0,2));head.add(label(title,18,true,DARK));
-        if(!subtitle.isBlank())head.add(label(subtitle,12,false,MUTED));p.add(head,BorderLayout.NORTH);
-        p.add(contents,BorderLayout.CENTER);return p;
+        return GlossyTheme.outlined(dashboardSection(title,subtitle,contents),
+            new Color(234,248,234),new Color(128,190,137),1,30);
     }
     static JPanel actions(JButton... buttons){JPanel p=pane(new FlowLayout(FlowLayout.LEFT,8,0));for(JButton b:buttons)p.add(b);return p;}
-    static JComponent blank(String title,String desc){JPanel p=card(new BorderLayout());pad(p,22,25,22,25);p.add(label(title,20,true,DARK),BorderLayout.NORTH);p.add(label(desc,14,false,MUTED),BorderLayout.CENTER);return p;}
+    static JComponent blank(String title,String desc){
+        JPanel p=new DashboardGlass(new BorderLayout(0,5),new Color(248,252,246),false);
+        pad(p,12,19,14,19);
+        p.add(label(title,17,true,DARK),BorderLayout.NORTH);
+        JLabel note=label(desc,12,false,MUTED);note.setToolTipText(desc);
+        p.add(note,BorderLayout.CENTER);
+        return GlossyTheme.outlined(p,new Color(236,248,230),new Color(128,190,137),1,25);
+    }
     static String fmt(double val){return String.format(Locale.US,"%,.0f",val);}
     static double total(List<Map<String,String>> rs,String key){return rs.stream().mapToDouble(r->Storage.num(r,key)).sum();}
     static List<Map<String,String>> filter(List<Map<String,String>> rs,Predicate<Map<String,String>> p){return rs.stream().filter(p).toList();}
@@ -1629,15 +1630,18 @@ private JComponent header() {
         table.setSelectionBackground(new Color(215,242,220));table.setSelectionForeground(DARK);table.setGridColor(new Color(234,241,236));
         table.getTableHeader().setFont(BOLD);table.getTableHeader().setBackground(new Color(234,243,238));
         table.setAutoCreateRowSorter(true);table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+        GlossyTheme.styleTable(table);
         for(int i=0;i<cols.size();i++)table.getColumnModel().getColumn(i).setPreferredWidth(Math.max(85,Math.min(240,cols.get(i).length()*9+105)));
         JScrollPane sp=new JScrollPane(table);sp.setBorder(BorderFactory.createLineBorder(new Color(227,235,230)));
         sp.getViewport().setBackground(Color.WHITE);
+        GlossyTheme.styleScrollPane(sp);
         if(placeholder!=null){
             JPanel wrap=pane(new BorderLayout(0,7));JTextField search=new JTextField();styleInput(search);search.putClientProperty("JTextField.placeholderText",placeholder);
             search.setToolTipText(placeholder);wrap.add(search,BorderLayout.NORTH);wrap.add(sp,BorderLayout.CENTER);
             TableRowSorter<DefaultTableModel> sorter=new TableRowSorter<>(model);table.setRowSorter(sorter);
             watch(search,()->sorter.setRowFilter(RowFilter.regexFilter("(?i)"+java.util.regex.Pattern.quote(search.getText()))));
             JScrollPane result=new JScrollPane(wrap);result.setBorder(null);result.getViewport().setBackground(Color.WHITE);
+            GlossyTheme.styleScrollPane(result);
             return new TableParts(table,result,rs);
         }
         return new TableParts(table,sp,rs);
@@ -1921,9 +1925,16 @@ private JComponent header() {
                 g.drawRoundRect(x-12,y-11,24,23,5,5);g.drawLine(x-12,y-3,x+12,y-3);
                 g.drawLine(x-6,y-14,x-6,y-8);g.drawLine(x+6,y-14,x+6,y-8);
                 g.fillOval(x-5,y+2,4,4);g.fillOval(x+3,y+2,4,4);
-            }else if(title.contains("Income")){
+            }else if(title.contains("Expir")||title.contains("Today")){
+                g.drawOval(x-12,y-12,24,24);
+                g.drawLine(x,y,x,y-7);g.drawLine(x,y,x+6,y+3);
+            }else if(title.contains("Harvest")||title.contains("Crop")||title.contains("Livestock")){
+                g.drawLine(x-1,y+13,x+2,y-11);
+                g.drawOval(x-13,y-8,12,8);g.drawOval(x+1,y-12,13,9);
+                g.drawLine(x-8,y-5,x-1,y+3);g.drawLine(x+9,y-9,x+2,y-1);
+            }else if(title.contains("Income")||title.contains("Expenses")||title.contains("Balance")||title.contains("Sales")){
                 g.setFont(new Font("Segoe UI",Font.BOLD,29));g.drawString("₱",x-10,y+10);
-            }else if(title.contains("Low")||title.contains("Pending")){
+            }else if(title.contains("Low")||title.contains("Pending")||title.contains("Overdue")||title.contains("Below")){
                 g.drawOval(x-13,y-13,26,26);g.drawLine(x,y-7,x,y+3);g.fillOval(x-2,y+7,4,4);
             }else{
                 g.setFont(new Font("Segoe UI",Font.BOLD,28));
