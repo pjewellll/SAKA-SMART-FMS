@@ -24,3 +24,19 @@ OLD_SCRIPTS_BACKUP/
 
 # Keep local demo records private
 data/
+
+# SAKA-SMART local backup files
+*.bak
+*.before-*
+*.java.before-*
+
+# Local credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Java compiled output
+*.class
+out/
