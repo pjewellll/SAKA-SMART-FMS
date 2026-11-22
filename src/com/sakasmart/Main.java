@@ -1,13 +1,6 @@
 package com.sakasmart;
 
-import javax.swing.*;
-import javax.swing.border.*;
-import javax.swing.event.DocumentEvent;
-import javax.swing.event.DocumentListener;
-import javax.swing.table.*;
-
 import com.sakasmart.Main.RoundedPanel;
-
 import java.awt.*;
 import java.awt.event.*;
 import java.awt.geom.*;
@@ -15,11 +8,15 @@ import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.time.*;
-import java.time.format.*;
 import java.util.*;
 import java.util.List;
 import java.util.function.*;
 import java.util.zip.*;
+import javax.swing.*;
+import javax.swing.border.*;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+import javax.swing.table.*;
 
 /** SAKA-SMART -- Java 21, no third-party UI libraries. */
 public final class Main {
@@ -153,18 +150,10 @@ public final class Main {
     static JPanel pane(LayoutManager layout){JPanel p=new JPanel(layout);p.setOpaque(false);return p;}
     static void pad(JComponent c,int t,int l,int b,int r){c.setBorder(new EmptyBorder(t,l,b,r));}
     static JButton btn(String s,Color color) {
-        JButton b=new JButton(s){
-            @Override protected void paintComponent(Graphics g){
-                Graphics2D x=(Graphics2D)g.create();x.setRenderingHint(RenderingHints.KEY_ANTIALIASING,RenderingHints.VALUE_ANTIALIAS_ON);
-                x.setColor(getModel().isPressed()?color.darker():getModel().isRollover()?color.brighter():color);
-                x.fillRoundRect(0,0,getWidth(),getHeight(),14,14);x.dispose();super.paintComponent(g);
-            }
-        };
-        b.setForeground(Color.WHITE);b.setFont(BOLD);b.setContentAreaFilled(false);b.setBorderPainted(false);b.setFocusPainted(false);
-        b.setBorder(new EmptyBorder(9,16,9,16));b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));b.setOpaque(false);return b;
+        return GlossyTheme.button(s, color);
     }
     static JButton secondary(String text){
-        JButton b=btn(text,new Color(107,127,115));return b;
+        return GlossyTheme.secondary(text);
     }
     static class RoundedPanel extends JPanel {
         final Color color;final int arc;
@@ -174,7 +163,7 @@ public final class Main {
             x.setColor(color);x.fillRoundRect(0,0,getWidth(),getHeight(),arc,arc);x.dispose();super.paintComponent(g);
         }
     }
-    static JPanel card(LayoutManager l){return new RoundedPanel(new Color(253,255,244),22,l);}
+    static JPanel card(LayoutManager l){return GlossyTheme.card(l);}
     static JComponent spacer(int h){JPanel p=pane(new BorderLayout());p.setPreferredSize(new Dimension(1,h));p.setMaximumSize(new Dimension(Integer.MAX_VALUE,h));return p;}
     static void stretch(JComponent c){c.setAlignmentX(Component.LEFT_ALIGNMENT);c.setMaximumSize(new Dimension(Integer.MAX_VALUE,Short.MAX_VALUE));}
     static String today(){return LocalDate.now().toString();}
@@ -308,8 +297,8 @@ public final class Main {
         center.setLayout(new BoxLayout(center,BoxLayout.Y_AXIS));
         JPanel toggles=pane(new GridLayout(1,2,5,0));
         toggles.setBorder(new EmptyBorder(3,5,3,5));
-        JToggleButton farmerChoice=new GlassLoginChoice("User Login","For Farmers / Staff",true,loginMotion);
-        JToggleButton adminChoice=new GlassLoginChoice("Admin Login","For System Administrators",false,loginMotion);
+        JToggleButton farmerChoice=new GlassLoginChoice("Farmer Login","Farm Owners / Staff",true,loginMotion);
+        JToggleButton adminChoice=new GlassLoginChoice("Customer Login","For Buyers",false,loginMotion);
         ButtonGroup choices=new ButtonGroup();choices.add(farmerChoice);choices.add(adminChoice);
         farmerChoice.addActionListener(e->{farmerChoice.repaint();adminChoice.repaint();});
         adminChoice.addActionListener(e->{farmerChoice.repaint();adminChoice.repaint();});
@@ -419,6 +408,7 @@ public final class Main {
         card.add(new RiseReveal(footer,loginMotion,1.06),BorderLayout.SOUTH);
 
         enter.addActionListener(e->{
+            System.out.println("[SAKA-SMART] LOG IN BUTTON CLICKED");
             String login=usernameField.getText().trim();char[] pw=passwordField.getPassword();
             try{
                 Map<String,String> matched=null;
@@ -427,8 +417,10 @@ public final class Main {
                     loginError.setText("Incorrect username or password.");return;}
                 if(!Boolean.parseBoolean(matched.getOrDefault("active","false"))){
                     loginError.setText("Your farm membership is awaiting owner approval.");return;}
-                boolean isAdmin="SYSTEM_ADMIN".equals(matched.get("role"));
-                if(isAdmin!=adminChoice.isSelected()){loginError.setText("Select the correct User or Admin tab.");return;}
+                boolean isCustomer="CUSTOMER".equals(matched.get("role"));
+                if(isCustomer!=adminChoice.isSelected()){
+                    loginError.setText(isCustomer?"Select Customer Login.":"Select Farmer Login.");return;
+                }
                 if(remember.isSelected())prefs.put("remembered_username",login);else prefs.remove("remembered_username");
                 loginUser(matched);
             }finally{Arrays.fill(pw,'\0');}
@@ -997,7 +989,7 @@ public final class Main {
         }catch(Exception e){error(e);}finally{Arrays.fill(first,'\0');Arrays.fill(second,'\0');}
     }
 
-    static void styleInput(JTextField tf){tf.setFont(FONT);tf.setPreferredSize(new Dimension(200,38));tf.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(new Color(200,217,205)),new EmptyBorder(8,12,8,12)));}
+    static void styleInput(JTextField tf){GlossyTheme.styleInput(tf);}
     static void styleToggle(AbstractButton b){b.setFont(BOLD);b.setFocusPainted(false);b.setBackground(new Color(221,242,228));b.setForeground(DARK);b.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));}
     private void loginUser(Map<String,String> account){
         if(!Boolean.parseBoolean(account.getOrDefault("active","false"))){
@@ -1006,33 +998,33 @@ public final class Main {
         user=new HashMap<>(account);
         store=new ScopedStorage(backend,user);
         store.log(username(),"Signed in to SAKA-SMART");
-        route="Dashboard";showShell();
+        route="CUSTOMER".equals(role())?"Customer Home":"Dashboard";showShell();
     }
 
     /** Separate onboarding for independent farm owners and applicants joining a farm. */
     private void register(){register(null);}
     private void register(SocialLoginService.Profile social){
-        Object[] options={"Create My Own Farm","Join Existing Farm","Cancel"};
+        Object[] options={"Create My Own Farm","Join Existing Farm","Register as Customer","Cancel"};
         int mode=StyledDialogs.showOptionDialog(frame,
             "Choose how you want to use SAKA-SMART.","Create an Account",
             JOptionPane.DEFAULT_OPTION,JOptionPane.QUESTION_MESSAGE,null,options,options[0]);
-        if(mode!=0 && mode!=1)return;
+        if(mode!=0 && mode!=1 && mode!=2)return;
         JTextField name=new JTextField(social==null?"":social.name());
         JTextField login=new JTextField();
-        JPasswordField password=new JPasswordField();
+        JPasswordField password=new JPasswordField(),confirmPassword=new JPasswordField();
         JTextField email=new JTextField(social==null?"":social.email());
         for(JTextField f:List.of(name,login,password,email))styleInput(f);
         JPanel fields=pane(new GridLayout(0,1,0,6));
         fields.add(label("Full name",13,true,DARK));fields.add(name);
         fields.add(label("Choose username",13,true,DARK));fields.add(login);
-        if(social==null){fields.add(label("Password (8+ characters)",13,true,DARK));fields.add(password);}
+        if(social==null){fields.add(label("Password (8+ chars, letters + numbers, no spaces)",12,true,DARK));fields.add(password);fields.add(label("Confirm Password",13,true,DARK));fields.add(confirmPassword);}
         fields.add(label("Recovery email (optional, not verified yet)",12,true,DARK));fields.add(email);
         JTextField farmName=new JTextField(),location=new JTextField();JComboBox<FarmOption> farmChoice=null;
         if(mode==0){
             styleInput(farmName);styleInput(location);
             fields.add(label("Your farm's name",13,true,DARK));fields.add(farmName);
             fields.add(label("Farm location",13,true,DARK));fields.add(location);
-        }else{
+        }else if(mode==1){
             try{
                 java.util.List<Map<String,String>> farms=backend.publicFarms();
                 if(farms.isEmpty()){info("There are no existing farms. Choose Create My Own Farm instead.");return;}
@@ -1042,13 +1034,13 @@ public final class Main {
                 fields.add(label("The owner must approve your membership before you can access farm records.",11,false,MUTED));
             }catch(Exception e){error(e);return;}
         }
-        if(StyledDialogs.showConfirmDialog(frame,fields,mode==0?"Create Your Farm":"Join a Farm",
+        if(StyledDialogs.showConfirmDialog(frame,fields,mode==0?"Create Your Farm":mode==1?"Join a Farm":"Register as Customer",
             JOptionPane.OK_CANCEL_OPTION)!=JOptionPane.OK_OPTION)return;
         char[] typed=password.getPassword();
         try{
-            if(name.getText().isBlank()||!login.getText().trim().matches("[A-Za-z0-9_.-]{3,40}"))
-                throw new IllegalArgumentException("Enter your full name and a username of 3-40 valid characters.");
-            if(social==null && typed.length<8)throw new IllegalArgumentException("Password must contain at least 8 characters.");
+            if(name.getText().isBlank()||!login.getText().trim().matches("[\\p{L}\\p{N}._ -]{2,40}"))
+                throw new IllegalArgumentException("Enter your full name and a 2-40 character username (letters, numbers, spaces, . _ -).");
+            if(social==null){PasswordPolicy.requireValid(typed);if(!Arrays.equals(typed,confirmPassword.getPassword()))throw new IllegalArgumentException("Confirmation password does not match.");}
             if(!email.getText().isBlank() && !ContactValidation.validEmail(email.getText().trim()))
                 throw new IllegalArgumentException("Please enter a valid recovery email.");
             // Social accounts have a strong random local password; no implicit account linking by email.
@@ -1069,10 +1061,14 @@ public final class Main {
                 created=backend.registerOwnFarm(account,farm,provider,subject);
                 info("Your farm is ready. Welcome to SAKA-SMART!");
                 loginUser(backend.byId("users",created.get("id")));
-            }else{
+            }else if(mode==1){
                 if(farmChoice==null || farmChoice.getSelectedItem()==null)throw new IllegalArgumentException("Select a farm.");
                 created=backend.registerJoinFarm(account,((FarmOption)farmChoice.getSelectedItem()).id,provider,subject);
                 info("Membership request sent. The farm owner must approve your access.");
+            }else{
+                created=backend.registerCustomer(account,provider,subject);
+                info("Customer account created. Welcome to SAKA-SMART!");
+                loginUser(backend.byId("users",created.get("id")));
             }
         }catch(Exception ex){
             System.err.println("[SAKA-SMART] Farm registration failed:");
@@ -1193,12 +1189,13 @@ public final class Main {
         brandRow.setAlignmentX(Component.LEFT_ALIGNMENT);
         sidebar.add(brandRow);
         sidebar.add(spacer(18));
-        String[] routes=admin()?new String[]{"Dashboard","Users","Farm Profile","Learning Center","System Records","Backup & Restore","Settings"}:
-            "FARM_OWNER".equals(role())?new String[]{"Dashboard","Inventory","Calendar","Production Tracking","Accounting","Marketplace / Sales","Farm Members","Learning Center","Settings"}:
+        String[] routes="CUSTOMER".equals(role())?new String[]{"Customer Home","Explore Farms","My Cart","My Orders","Settings"}:
+            admin()?new String[]{"Dashboard","Users","Farm Profile","Learning Center","System Records","Backup & Restore","Settings"}:
+            "FARM_OWNER".equals(role())?new String[]{"Dashboard","Inventory","Calendar","Production Tracking","Accounting","Marketplace / Sales","Customer Orders","Farm Members","Learning Center","Settings"}:
             new String[]{"Dashboard","Inventory","Calendar","Production Tracking","Accounting","Marketplace / Sales","Learning Center","Settings"};
         for(String r:routes) {
-            JButton b="Dashboard".equals(route)?new DashboardNavButton(r,r.equals(route)):
-                btn(symbol(r)+"  "+r,r.equals(route)?GREEN:DARK);
+            // Use the exact same Dashboard navigation controls on every route.
+            JButton b=new DashboardNavButton(r,r.equals(route));
             b.setHorizontalAlignment(SwingConstants.LEFT);
             b.setMaximumSize(new Dimension(Integer.MAX_VALUE,47));b.setPreferredSize(new Dimension(210,45));b.setAlignmentX(Component.LEFT_ALIGNMENT);
             b.addActionListener(e->{route=r;showShell();});sidebar.add(b);sidebar.add(spacer(7));
@@ -1212,33 +1209,372 @@ public final class Main {
         main.add(header(),BorderLayout.NORTH);
         pageHolder=pane(new BorderLayout());pageHolder.setBackground(BG);
         JScrollPane scroll=new JScrollPane(pageHolder);scroll.setBorder(null);scroll.getViewport().setBackground(BG);scroll.getVerticalScrollBar().setUnitIncrement(22);
+        GlossyTheme.styleScrollPane(scroll);
         main.add(scroll,BorderLayout.CENTER);root.add(main,BorderLayout.CENTER);
         frame.setContentPane(root);renderPage();frame.revalidate();frame.repaint();
     }
     private static String symbol(String name){return switch(name){
-        case "Dashboard"->"⌂";case "Inventory"->"▣";case "Calendar"->"▦";case "Production Tracking"->"▥";
+        case "Customer Home"->"⌂";case "Explore Farms"->"♣";case "My Cart"->"▣";case "My Orders"->"▤";case "Customer Orders"->"▤";case "Dashboard"->"⌂";case "Inventory"->"▣";case "Calendar"->"▦";case "Production Tracking"->"▥";
         case "Accounting"->"₱";case "Marketplace / Sales"->"▤";case "Learning Center"->"▧";
         case "Users"->"♟";case "Farm Members"->"♟";case "Settings"->"⚙";case "Backup & Restore"->"↥";
         case "Farm Profile"->"♣";case "System Records"->"≡";default->"•";};}
-    private JComponent header(){
-        JPanel top=new FarmBanner(false,true);top.setPreferredSize(new Dimension(800,139));top.setLayout(new BorderLayout());pad(top,21,25,20,25);
-        JPanel title=pane(new GridLayout(2,1,0,0));title.add(label(admin()?"ADMIN CONTROL CENTER":"SAKA-SMART  •  "+route.toUpperCase(),25,true,DARK));
-        title.add(label(admin()?"Manage users, records, and system settings.":"Smart farms. Brighter tomorrows.",15,false,DARK));top.add(title,BorderLayout.WEST);
-        JPanel right=pane(new FlowLayout(FlowLayout.RIGHT,7,0));
-        JLabel mode=label(store.mode().startsWith("POSTGRESQL")?"● PostgreSQL connected":"● Local demo",12,true,GREEN);right.add(mode);
-        JButton alerts="Dashboard".equals(route)?dashboardButton("Alerts"):secondary("🔔 Alerts");
-        alerts.addActionListener(e->notifications());right.add(alerts);
-        JButton refresh="Dashboard".equals(route)?dashboardButton("Refresh"):secondary("↻ Refresh");
-        refresh.addActionListener(e->renderPage());right.add(refresh);
-        JButton logout="Dashboard".equals(route)?dashboardButton("Log Out"):secondary("Log Out");
-        logout.addActionListener(e->{store.log(username(),"Signed out");user=null;store=backend;showLogin();});right.add(logout);
-        JPanel topRight=pane(new BorderLayout());topRight.add(right,BorderLayout.NORTH);topRight.add(label(user.getOrDefault("full_name",username())+"  •  "+role().replace('_',' '),12,true,DARK),BorderLayout.SOUTH);
-        top.add(topRight,BorderLayout.EAST);return top;
+
+
+private JComponent header() {
+    final Color titleGreen = new Color(7, 78, 45);
+    final Color subGreen = new Color(75, 112, 83);
+
+    // Compact, softly illustrated header.
+    JPanel top = new JPanel(new BorderLayout(20, 0)) {
+        @Override
+        protected void paintComponent(Graphics original) {
+            super.paintComponent(original);
+            Graphics2D g = (Graphics2D) original.create();
+            g.setRenderingHint(
+                RenderingHints.KEY_ANTIALIASING,
+                RenderingHints.VALUE_ANTIALIAS_ON
+            );
+
+            int w = getWidth();
+            int h = getHeight();
+
+            g.setPaint(new GradientPaint(
+                0, 0, new Color(250, 254, 250),
+                0, h, new Color(225, 242, 227)
+            ));
+            g.fillRect(0, 0, w, h);
+
+            // Subtle farming landscape.
+            Path2D.Double field = new Path2D.Double();
+            field.moveTo(0, h);
+            field.lineTo(0, h - 20);
+            field.curveTo(
+                w * 0.25, h - 48,
+                w * 0.54, h - 12,
+                w, h - 35
+            );
+            field.lineTo(w, h);
+            field.closePath();
+
+            g.setColor(new Color(73, 153, 96, 16));
+            g.fill(field);
+
+            // Bottom emerald accent.
+            g.setPaint(new GradientPaint(
+                0, h - 5, new Color(30, 119, 65),
+                w, h - 5, new Color(125, 191, 83)
+            ));
+            g.fillRect(0, h - 5, w, 5);
+
+            g.dispose();
+        }
+    };
+
+    top.setOpaque(false);
+    top.setPreferredSize(new Dimension(800, 120));
+    top.setBorder(new EmptyBorder(16, 29, 16, 29));
+
+    // LEFT: Branding and current page title.
+    JPanel left = pane(new BorderLayout(0, 3));
+    JPanel headings = pane(new GridLayout(2, 1, 0, 0));
+
+    headings.add(label(
+        "SAKA-SMART  /  FARM MANAGEMENT SYSTEM",
+        10, true, new Color(49, 128, 76)
+    ));
+
+    headings.add(label(
+        admin()
+            ? "Admin Control Center"
+            : ("Dashboard".equals(route)
+                ? "Dashboard Overview"
+                : route),
+        24, true, titleGreen
+    ));
+
+    left.add(headings, BorderLayout.CENTER);
+    left.add(label(
+        admin()
+            ? "Manage users, records, and system settings."
+            : "Smart farms. Brighter tomorrows.",
+        12, false, subGreen
+    ), BorderLayout.SOUTH);
+
+    top.add(left, BorderLayout.WEST);
+
+    // RIGHT: Profile avatar and user information.
+    String fullName = user.getOrDefault(
+        "full_name", username()
+    );
+
+    if (fullName == null || fullName.isBlank()) {
+        fullName = username();
+    }
+
+    JPanel profile = pane(new BorderLayout(9, 0));
+
+    JComponent avatar = new JComponent() {
+        @Override
+        protected void paintComponent(Graphics original) {
+            Graphics2D g = (Graphics2D) original.create();
+            g.setRenderingHint(
+                RenderingHints.KEY_ANTIALIASING,
+                RenderingHints.VALUE_ANTIALIAS_ON
+            );
+
+            int w = getWidth();
+            int h = getHeight();
+
+            g.setPaint(new GradientPaint(
+                0, 0, new Color(47, 160, 95),
+                0, h, new Color(7, 91, 53)
+            ));
+            g.fillOval(1, 1, w - 2, h - 2);
+
+            g.setColor(new Color(255, 255, 255, 185));
+            g.setStroke(new BasicStroke(1.3f));
+            g.drawOval(2, 2, w - 5, h - 5);
+
+            // White human silhouette.
+            g.setColor(Color.WHITE);
+            g.fillOval(w / 2 - 6, h / 2 - 11, 12, 12);
+            g.fillRoundRect(
+                w / 2 - 13,
+                h / 2 + 3,
+                26,
+                15,
+                16,
+                16
+            );
+
+
+            g.dispose();
+        }
+    };
+
+    avatar.setPreferredSize(new Dimension(42, 42));
+    avatar.setToolTipText("User profile");
+
+    profile.add(avatar, BorderLayout.EAST);
+
+    JPanel userInfo = pane(new GridLayout(2, 1, 0, 1));
+
+    JLabel nameLabel = label(
+        fullName, 13, true, titleGreen
+    );
+    nameLabel.setPreferredSize(new Dimension(155, 20));
+    nameLabel.setToolTipText(fullName);
+
+    userInfo.add(nameLabel);
+    userInfo.add(label(
+        role().replace('_', ' '),
+        11, false, subGreen
+    ));
+
+    profile.add(userInfo, BorderLayout.WEST);
+
+    // Count active alerts using the existing alert rules.
+    int count = 0;
+
+    if(!"CUSTOMER".equals(role()))for (Map<String, String> r : rows("inventory")) {
+        if (Storage.num(r, "quantity")
+                <= Storage.num(r, "min_stock")) {
+            count++;
+        }
+        if (isExpiring(r)) {
+            count++;
+        }
+    }
+
+    if(!"CUSTOMER".equals(role()))for (Map<String, String> r : rows("events")) {
+        if ("Upcoming".equals(v(r, "status"))
+                && v(r, "date").compareTo(today()) <= 0) {
+            count++;
+        }
+    }
+
+    if (admin()) {
+        for (Map<String, String> r : rows("users")) {
+            if (!"true".equalsIgnoreCase(v(r, "active"))) {
+                count++;
+            }
+        }
+        for (Map<String, String> r :
+                rows("password_reset_requests")) {
+            if ("PENDING".equals(v(r, "status"))) {
+                count++;
+            }
+        }
+    }
+
+    final int alertCount = count;
+
+    // NOTIFICATION BELL with active-alert badge.
+    JButton notificationsButton = new JButton() {
+        @Override
+        protected void paintComponent(Graphics original) {
+            Graphics2D g = (Graphics2D) original.create();
+            g.setRenderingHint(
+                RenderingHints.KEY_ANTIALIASING,
+                RenderingHints.VALUE_ANTIALIAS_ON
+            );
+
+            int w = getWidth();
+            int h = getHeight();
+
+            g.setColor(
+                getModel().isRollover()
+                    ? new Color(224, 243, 228)
+                    : new Color(250, 255, 251)
+            );
+            g.fillRoundRect(
+                1, 1, w - 3, h - 3, 15, 15
+            );
+
+            g.setColor(new Color(165, 203, 176));
+            g.setStroke(new BasicStroke(1.2f));
+            g.drawRoundRect(
+                1, 1, w - 3, h - 3, 15, 15
+            );
+
+            int cx = w / 2;
+            int cy = h / 2;
+
+            Path2D.Double bell = new Path2D.Double();
+            bell.moveTo(cx - 10, cy + 6);
+            bell.curveTo(
+                cx - 5, cy + 1,
+                cx - 9, cy - 11,
+                cx, cy - 11
+            );
+            bell.curveTo(
+                cx + 9, cy - 11,
+                cx + 5, cy + 1,
+                cx + 10, cy + 6
+            );
+            bell.closePath();
+
+            g.setColor(new Color(22, 105, 59));
+            g.setStroke(new BasicStroke(
+                1.8f,
+                BasicStroke.CAP_ROUND,
+                BasicStroke.JOIN_ROUND
+            ));
+            g.draw(bell);
+            g.fillOval(cx - 2, cy + 8, 4, 4);
+
+            if (alertCount > 0) {
+                String badge = alertCount > 9
+                    ? "9+"
+                    : Integer.toString(alertCount);
+
+                g.setColor(new Color(215, 57, 70));
+                g.fillOval(w - 21, 0, 19, 19);
+
+                g.setColor(Color.WHITE);
+                g.setFont(new Font(
+                    "Segoe UI", Font.BOLD, 10
+                ));
+
+                FontMetrics fm = g.getFontMetrics();
+                g.drawString(
+                    badge,
+                    w - 21
+                        + (19 - fm.stringWidth(badge)) / 2,
+                    13
+                );
+            }
+
+            g.dispose();
+        }
+    };
+
+    notificationsButton.setPreferredSize(
+        new Dimension(46, 43)
+    );
+    notificationsButton.setContentAreaFilled(false);
+    notificationsButton.setBorderPainted(false);
+    notificationsButton.setFocusPainted(false);
+    notificationsButton.setCursor(
+        Cursor.getPredefinedCursor(Cursor.HAND_CURSOR)
+    );
+    notificationsButton.setToolTipText(
+        "Notifications — " + alertCount + " active alerts"
+    );
+    notificationsButton.getAccessibleContext()
+        .setAccessibleName("Notifications");
+
+    notificationsButton.setEnabled(!"CUSTOMER".equals(role()));
+    notificationsButton.addActionListener(
+        e -> notifications()
+    );
+
+    // Preserve the existing Refresh action.
+    JButton refresh = dashboardButton("Refresh");
+    refresh.addActionListener(e -> renderPage());
+
+    // Preserve the existing secure logout flow.
+    JButton logout = dashboardButton("Log Out");
+    logout.addActionListener(e -> {
+        store.log(username(), "Signed out");
+        user = null;
+        store = backend;
+        showLogin();
+    });
+
+    JPanel toolbar = pane(
+        new FlowLayout(FlowLayout.RIGHT, 8, 0)
+    );
+
+    toolbar.add(notificationsButton);
+        toolbar.add(refresh);
+        toolbar.add(logout);
+        toolbar.add(profile);
+
+    JPanel right = pane(new BorderLayout(0, 3));
+    right.add(toolbar, BorderLayout.CENTER);
+
+    JLabel mode = label(
+        store.mode().startsWith("POSTGRESQL")
+            ? "● PostgreSQL connected"
+            : "● Local demo",
+        11, true, new Color(26, 131, 69)
+    );
+
+    mode.setHorizontalAlignment(SwingConstants.RIGHT);
+    right.add(mode, BorderLayout.SOUTH);
+
+    top.add(right, BorderLayout.EAST);
+
+    return top;
+}
+
+    /** Temporary customer landing page: deliberately no access to farm data or checkout. */
+    private JComponent customerHome(){
+        JPanel body=stack();
+        JPanel welcome=card(new BorderLayout(0,14));
+        pad(welcome,28,30,28,30);
+        welcome.add(label("Welcome to SAKA-SMART, "+username()+"!",25,true,DARK),BorderLayout.NORTH);
+        JPanel detail=pane(new GridLayout(0,1,0,13));
+        detail.add(label("Customer Account  |  Active",15,true,GREEN));
+        detail.add(label("Your buyer account is ready.",16,false,DARK));
+        detail.add(label("Marketplace shopping and order checkout are coming in the next implementation phase.",13,false,MUTED));
+        detail.add(label("Farm management data is not available to customer accounts.",13,false,MUTED));
+        welcome.add(detail,BorderLayout.CENTER);
+        addBlock(body,welcome,220);
+        return body;
     }
     void renderPage(){
+        if("CUSTOMER".equals(role()) && !Set.of("Customer Home","Explore Farms","My Cart","My Orders","Settings").contains(route))
+            route="Customer Home";
         pageHolder.removeAll();
         JPanel body=pane(new BorderLayout());body.setBackground(BG);pad(body,20,23,28,23);
         JComponent content = switch(route){
+            case "Customer Home" -> new MarketBrowsePage(this,false);
+            case "Explore Farms" -> new MarketBrowsePage(this,true);
+            case "My Cart" -> commerceLauncher("My Shopping Cart", "View your saved products and proceed to checkout.", () -> CommerceUI.cart(frame,username()));
+            case "My Orders" -> commerceLauncher("My Orders", "Track and review your purchases from local farmers.", () -> CommerceUI.myOrders(frame,username()));
+            case "Customer Orders" -> new FarmOrdersPage(frame,username());
             case "Dashboard" -> new DashboardPage(this).build();
             case "Inventory" -> new InventoryPage(this).build();
             case "Calendar" -> new CalendarPage(this).build();
@@ -1257,6 +1593,17 @@ public final class Main {
         body.add(content,BorderLayout.CENTER);pageHolder.add(body,BorderLayout.CENTER);
         pageHolder.revalidate();pageHolder.repaint();
     }
+    private JComponent commerceLauncher(String title,String description,Runnable open){
+        JPanel view=pane(new BorderLayout(0,18));
+        JPanel content=card(new BorderLayout(0,17));pad(content,30,30,30,30);
+        content.add(label(title,25,true,DARK),BorderLayout.NORTH);
+        content.add(label(description,16,false,DARK),BorderLayout.CENTER);
+        JButton button=GlossyTheme.button("Open "+title,GREEN);
+        button.addActionListener(e->open.run());
+        JPanel actions=pane(new FlowLayout(FlowLayout.LEFT));actions.add(button);
+        content.add(actions,BorderLayout.SOUTH);
+        view.add(content,BorderLayout.NORTH);return view;
+    }
     JPanel vertical(){JPanel p=pane(new GridBagLayout());p.setAlignmentX(Component.LEFT_ALIGNMENT);return p;}
     JPanel stack(){JPanel p=pane(null);p.setLayout(new BoxLayout(p,BoxLayout.Y_AXIS));return p;}
     static JPanel horizontal(JComponent... cs){JPanel p=pane(new GridLayout(1,cs.length,12,0));for(JComponent c:cs)p.add(c);return p;}
@@ -1264,19 +1611,27 @@ public final class Main {
         c.setAlignmentX(Component.LEFT_ALIGNMENT);c.setMaximumSize(new Dimension(Integer.MAX_VALUE,height));c.setPreferredSize(new Dimension(200,height));
         target.add(c);target.add(spacer(13));
     }
+    // Share Dashboard's actual glass, glyph and layered outline components across navigation pages.
+    // This is presentation-only; page logic, event handlers and storage calls are untouched.
     static JComponent stat(String title,String value,String detail,Color tint,String glyph){
-        JPanel p=new RoundedPanel(tint,20,new BorderLayout(8,4));pad(p,15,17,15,14);
-        JPanel group=pane(new GridLayout(3,1,0,1));group.add(label(title,13,true,TEXT));group.add(label(value,26,true,DARK));group.add(label(detail,11,false,MUTED));
-        p.add(group,BorderLayout.CENTER);p.add(label(glyph,35,true,GREEN),BorderLayout.EAST);return p;
+        Color shell=GlossyTheme.statShell(title,tint);
+        Color outline=GlossyTheme.statOutline(title);
+        return GlossyTheme.outlined(dashboardStat(title,value,detail,tint,glyph),
+            shell,outline,GlossyTheme.isCriticalStat(title)?2:1,30);
     }
     static JComponent section(String title,String subtitle,JComponent contents){
-        JPanel p=card(new BorderLayout(0,12));pad(p,16,17,16,17);
-        JPanel head=pane(new GridLayout(subtitle.isBlank()?1:2,1,0,2));head.add(label(title,18,true,DARK));
-        if(!subtitle.isBlank())head.add(label(subtitle,12,false,MUTED));p.add(head,BorderLayout.NORTH);
-        p.add(contents,BorderLayout.CENTER);return p;
+        return GlossyTheme.outlined(dashboardSection(title,subtitle,contents),
+            new Color(234,248,234),new Color(128,190,137),1,30);
     }
     static JPanel actions(JButton... buttons){JPanel p=pane(new FlowLayout(FlowLayout.LEFT,8,0));for(JButton b:buttons)p.add(b);return p;}
-    static JComponent blank(String title,String desc){JPanel p=card(new BorderLayout());pad(p,22,25,22,25);p.add(label(title,20,true,DARK),BorderLayout.NORTH);p.add(label(desc,14,false,MUTED),BorderLayout.CENTER);return p;}
+    static JComponent blank(String title,String desc){
+        JPanel p=new DashboardGlass(new BorderLayout(0,5),new Color(248,252,246),false);
+        pad(p,12,19,14,19);
+        p.add(label(title,17,true,DARK),BorderLayout.NORTH);
+        JLabel note=label(desc,12,false,MUTED);note.setToolTipText(desc);
+        p.add(note,BorderLayout.CENTER);
+        return GlossyTheme.outlined(p,new Color(236,248,230),new Color(128,190,137),1,25);
+    }
     static String fmt(double val){return String.format(Locale.US,"%,.0f",val);}
     static double total(List<Map<String,String>> rs,String key){return rs.stream().mapToDouble(r->Storage.num(r,key)).sum();}
     static List<Map<String,String>> filter(List<Map<String,String>> rs,Predicate<Map<String,String>> p){return rs.stream().filter(p).toList();}
@@ -1316,15 +1671,18 @@ public final class Main {
         table.setSelectionBackground(new Color(215,242,220));table.setSelectionForeground(DARK);table.setGridColor(new Color(234,241,236));
         table.getTableHeader().setFont(BOLD);table.getTableHeader().setBackground(new Color(234,243,238));
         table.setAutoCreateRowSorter(true);table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+        GlossyTheme.styleTable(table);
         for(int i=0;i<cols.size();i++)table.getColumnModel().getColumn(i).setPreferredWidth(Math.max(85,Math.min(240,cols.get(i).length()*9+105)));
         JScrollPane sp=new JScrollPane(table);sp.setBorder(BorderFactory.createLineBorder(new Color(227,235,230)));
         sp.getViewport().setBackground(Color.WHITE);
+        GlossyTheme.styleScrollPane(sp);
         if(placeholder!=null){
             JPanel wrap=pane(new BorderLayout(0,7));JTextField search=new JTextField();styleInput(search);search.putClientProperty("JTextField.placeholderText",placeholder);
             search.setToolTipText(placeholder);wrap.add(search,BorderLayout.NORTH);wrap.add(sp,BorderLayout.CENTER);
             TableRowSorter<DefaultTableModel> sorter=new TableRowSorter<>(model);table.setRowSorter(sorter);
             watch(search,()->sorter.setRowFilter(RowFilter.regexFilter("(?i)"+java.util.regex.Pattern.quote(search.getText()))));
             JScrollPane result=new JScrollPane(wrap);result.setBorder(null);result.getViewport().setBackground(Color.WHITE);
+            GlossyTheme.styleScrollPane(result);
             return new TableParts(table,result,rs);
         }
         return new TableParts(table,sp,rs);
@@ -1608,9 +1966,16 @@ public final class Main {
                 g.drawRoundRect(x-12,y-11,24,23,5,5);g.drawLine(x-12,y-3,x+12,y-3);
                 g.drawLine(x-6,y-14,x-6,y-8);g.drawLine(x+6,y-14,x+6,y-8);
                 g.fillOval(x-5,y+2,4,4);g.fillOval(x+3,y+2,4,4);
-            }else if(title.contains("Income")){
+            }else if(title.contains("Expir")||title.contains("Today")){
+                g.drawOval(x-12,y-12,24,24);
+                g.drawLine(x,y,x,y-7);g.drawLine(x,y,x+6,y+3);
+            }else if(title.contains("Harvest")||title.contains("Crop")||title.contains("Livestock")){
+                g.drawLine(x-1,y+13,x+2,y-11);
+                g.drawOval(x-13,y-8,12,8);g.drawOval(x+1,y-12,13,9);
+                g.drawLine(x-8,y-5,x-1,y+3);g.drawLine(x+9,y-9,x+2,y-1);
+            }else if(title.contains("Income")||title.contains("Expenses")||title.contains("Balance")||title.contains("Sales")){
                 g.setFont(new Font("Segoe UI",Font.BOLD,29));g.drawString("₱",x-10,y+10);
-            }else if(title.contains("Low")||title.contains("Pending")){
+            }else if(title.contains("Low")||title.contains("Pending")||title.contains("Overdue")||title.contains("Below")){
                 g.drawOval(x-13,y-13,26,26);g.drawLine(x,y-7,x,y+3);g.fillOval(x-2,y+7,4,4);
             }else{
                 g.setFont(new Font("Segoe UI",Font.BOLD,28));

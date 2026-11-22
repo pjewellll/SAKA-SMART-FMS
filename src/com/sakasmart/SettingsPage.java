@@ -37,6 +37,7 @@ final class SettingsPage extends PageBase {
         accountSecurity.add(securityDetails,BorderLayout.CENTER);
         addBlock(p,section("Account & Security",
             "Manage your password and verified recovery contacts",accountSecurity),230);
+        if("CUSTOMER".equals(role()))return p; // Never query private farm details in customer settings.
 
         JButton farm=btn("Edit Farm Profile",GREEN),backup=secondary("Export Data Archive");
         farm.addActionListener(e->editFarm());backup.addActionListener(e->backupArchive());
@@ -98,7 +99,8 @@ final class SettingsPage extends PageBase {
         char[] current=old.getPassword(),pw=first.getPassword(),verify=again.getPassword();
         try{
             if(!Security.verify(current,v(user,"password_hash")))throw new IllegalArgumentException("Current password incorrect.");
-            if(pw.length<8||!Arrays.equals(pw,verify))throw new IllegalArgumentException("New passwords must match and contain at least 8 characters.");
+            PasswordPolicy.requireValid(pw);
+            if(!Arrays.equals(pw,verify))throw new IllegalArgumentException("The confirmation password does not match.");
             String hashed=Security.hash(pw);store.edit("users",v(user,"id"),Map.of("password_hash",hashed));user.put("password_hash",hashed);
             store.log(username(),"Changed account password");info("Password changed successfully.");
         }catch(Exception e){error(e);}finally{Arrays.fill(current,'\0');Arrays.fill(pw,'\0');Arrays.fill(verify,'\0');}

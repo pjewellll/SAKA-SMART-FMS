@@ -26,10 +26,15 @@ public interface Storage {
     /** Revoke an issued code if the external delivery API rejects the request. */
     void cancelRecoveryDelivery(String requestId) throws Exception;
 
+    /** Strictly public fields only. Customers must never read raw farm or inventory tables. */
+    List<Map<String,String>> publicMarketFarms() throws Exception;
+    List<Map<String,String>> publicMarketProducts() throws Exception;
     /** Public farm directory exposes ID and name only (not farm data). */
     List<Map<String,String>> publicFarms() throws Exception;
     /** Register a new independent farm owner atomically with their farm. */
     Map<String,String> registerOwnFarm(Map<String,String> account,Map<String,String> farm,String provider,String subject) throws Exception;
+    /** Register a customer without farm membership. */
+    Map<String,String> registerCustomer(Map<String,String> account,String provider,String subject) throws Exception;
     /** Register an inactive applicant belonging to a selected farm. */
     Map<String,String> registerJoinFarm(Map<String,String> account,String farmId,String provider,String subject) throws Exception;
     /** Farm owner approves/rejects their farm member and assigns authorized role. */
