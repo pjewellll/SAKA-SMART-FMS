@@ -60,6 +60,7 @@ public final class Schema {
             new Field("handled_at", "Handled At (UTC)", Type.TEXT, false));
         def("inventory", "Inventory",
             new Field("name", "Item Name", Type.TEXT, true),
+            new Field("barcode", "Barcode (scan with phone)", Type.TEXT, false),
             new Field("category", "Category", "Seeds", "Fertilizer", "Pesticide", "Feed", "Equipment", "Medicine", "Fuel", "Packaging", "Crops", "Livestock Product", "Other"),
             new Field("kind", "Stock Type", "SUPPLY", "HARVEST"),
             new Field("quantity", "Quantity", Type.NUMBER, true),

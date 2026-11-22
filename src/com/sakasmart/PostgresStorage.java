@@ -47,6 +47,9 @@ public final class PostgresStorage implements Storage {
             st.execute("ALTER TABLE inventory ADD COLUMN IF NOT EXISTS market_published BOOLEAN NOT NULL DEFAULT FALSE");
             st.execute("ALTER TABLE inventory ADD COLUMN IF NOT EXISTS market_description TEXT");
             st.execute("ALTER TABLE inventory ADD COLUMN IF NOT EXISTS market_image_url TEXT");
+            // Phone barcode scanner support
+            st.execute("ALTER TABLE inventory ADD COLUMN IF NOT EXISTS barcode TEXT");
+            st.execute("CREATE UNIQUE INDEX IF NOT EXISTS saka_inventory_barcode_uniq ON inventory(farm_id,barcode) WHERE barcode IS NOT NULL AND barcode<>''");
             st.execute("CREATE UNIQUE INDEX IF NOT EXISTS saka_social_subject_uniq ON social_identities(provider,subject)");
         }
         try(Statement st=c.createStatement();ResultSet rs=st.executeQuery("SELECT COUNT(*) FROM users")){

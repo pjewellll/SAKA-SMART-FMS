@@ -73,7 +73,20 @@ final class InventoryPage extends PageBase {
         tabs.add(suppliesButton);
         tabs.add(harvestButton);
         categories.add(tabs, BorderLayout.WEST);
-        categories.add(centeredHint("Select a category to manage its records"), BorderLayout.EAST);
+
+        if (editable("inventory")) {
+            JButton scanner = secondary("Phone Scanner");
+            scanner.setToolTipText(
+                "Use your cellphone camera as a barcode scanner for stock in / new items"
+            );
+            scanner.addActionListener(e -> InventoryScanner.show(host));
+            categories.add(scanner, BorderLayout.EAST);
+        } else {
+            categories.add(
+                centeredHint("Select a category to manage its records"),
+                BorderLayout.EAST
+            );
+        }
         addBlock(page, section("Inventory Categories",
             "Organize your supplies and harvested products in one place", categories), 168);
 
