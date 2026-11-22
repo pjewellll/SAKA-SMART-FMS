@@ -297,8 +297,8 @@ public final class Main {
         center.setLayout(new BoxLayout(center,BoxLayout.Y_AXIS));
         JPanel toggles=pane(new GridLayout(1,2,5,0));
         toggles.setBorder(new EmptyBorder(3,5,3,5));
-        JToggleButton farmerChoice=new GlassLoginChoice("User Login","For Farmers / Staff",true,loginMotion);
-        JToggleButton adminChoice=new GlassLoginChoice("Admin Login","For System Administrators",false,loginMotion);
+        JToggleButton farmerChoice=new GlassLoginChoice("Farmer Login","Farm Owners / Staff",true,loginMotion);
+        JToggleButton adminChoice=new GlassLoginChoice("Customer Login","For Buyers",false,loginMotion);
         ButtonGroup choices=new ButtonGroup();choices.add(farmerChoice);choices.add(adminChoice);
         farmerChoice.addActionListener(e->{farmerChoice.repaint();adminChoice.repaint();});
         adminChoice.addActionListener(e->{farmerChoice.repaint();adminChoice.repaint();});
@@ -417,8 +417,10 @@ public final class Main {
                     loginError.setText("Incorrect username or password.");return;}
                 if(!Boolean.parseBoolean(matched.getOrDefault("active","false"))){
                     loginError.setText("Your farm membership is awaiting owner approval.");return;}
-                boolean isAdmin="SYSTEM_ADMIN".equals(matched.get("role"));
-                if(isAdmin!=adminChoice.isSelected()){loginError.setText("Select the correct User or Admin tab.");return;}
+                boolean isCustomer="CUSTOMER".equals(matched.get("role"));
+                if(isCustomer!=adminChoice.isSelected()){
+                    loginError.setText(isCustomer?"Select Customer Login.":"Select Farmer Login.");return;
+                }
                 if(remember.isSelected())prefs.put("remembered_username",login);else prefs.remove("remembered_username");
                 loginUser(matched);
             }finally{Arrays.fill(pw,'\0');}
@@ -996,33 +998,33 @@ public final class Main {
         user=new HashMap<>(account);
         store=new ScopedStorage(backend,user);
         store.log(username(),"Signed in to SAKA-SMART");
-        route="Dashboard";showShell();
+        route="CUSTOMER".equals(role())?"Customer Home":"Dashboard";showShell();
     }
 
     /** Separate onboarding for independent farm owners and applicants joining a farm. */
     private void register(){register(null);}
     private void register(SocialLoginService.Profile social){
-        Object[] options={"Create My Own Farm","Join Existing Farm","Cancel"};
+        Object[] options={"Create My Own Farm","Join Existing Farm","Register as Customer","Cancel"};
         int mode=StyledDialogs.showOptionDialog(frame,
             "Choose how you want to use SAKA-SMART.","Create an Account",
             JOptionPane.DEFAULT_OPTION,JOptionPane.QUESTION_MESSAGE,null,options,options[0]);
-        if(mode!=0 && mode!=1)return;
+        if(mode!=0 && mode!=1 && mode!=2)return;
         JTextField name=new JTextField(social==null?"":social.name());
         JTextField login=new JTextField();
-        JPasswordField password=new JPasswordField();
+        JPasswordField password=new JPasswordField(),confirmPassword=new JPasswordField();
         JTextField email=new JTextField(social==null?"":social.email());
         for(JTextField f:List.of(name,login,password,email))styleInput(f);
         JPanel fields=pane(new GridLayout(0,1,0,6));
         fields.add(label("Full name",13,true,DARK));fields.add(name);
         fields.add(label("Choose username",13,true,DARK));fields.add(login);
-        if(social==null){fields.add(label("Password (8+ characters)",13,true,DARK));fields.add(password);}
+        if(social==null){fields.add(label("Password (8+ chars, letters + numbers, no spaces)",12,true,DARK));fields.add(password);fields.add(label("Confirm Password",13,true,DARK));fields.add(confirmPassword);}
         fields.add(label("Recovery email (optional, not verified yet)",12,true,DARK));fields.add(email);
         JTextField farmName=new JTextField(),location=new JTextField();JComboBox<FarmOption> farmChoice=null;
         if(mode==0){
             styleInput(farmName);styleInput(location);
             fields.add(label("Your farm's name",13,true,DARK));fields.add(farmName);
             fields.add(label("Farm location",13,true,DARK));fields.add(location);
-        }else{
+        }else if(mode==1){
             try{
                 java.util.List<Map<String,String>> farms=backend.publicFarms();
                 if(farms.isEmpty()){info("There are no existing farms. Choose Create My Own Farm instead.");return;}
@@ -1032,13 +1034,13 @@ public final class Main {
                 fields.add(label("The owner must approve your membership before you can access farm records.",11,false,MUTED));
             }catch(Exception e){error(e);return;}
         }
-        if(StyledDialogs.showConfirmDialog(frame,fields,mode==0?"Create Your Farm":"Join a Farm",
+        if(StyledDialogs.showConfirmDialog(frame,fields,mode==0?"Create Your Farm":mode==1?"Join a Farm":"Register as Customer",
             JOptionPane.OK_CANCEL_OPTION)!=JOptionPane.OK_OPTION)return;
         char[] typed=password.getPassword();
         try{
-            if(name.getText().isBlank()||!login.getText().trim().matches("[A-Za-z0-9_.-]{3,40}"))
-                throw new IllegalArgumentException("Enter your full name and a username of 3-40 valid characters.");
-            if(social==null && typed.length<8)throw new IllegalArgumentException("Password must contain at least 8 characters.");
+            if(name.getText().isBlank()||!login.getText().trim().matches("[\\p{L}\\p{N}._ -]{2,40}"))
+                throw new IllegalArgumentException("Enter your full name and a 2-40 character username (letters, numbers, spaces, . _ -).");
+            if(social==null){PasswordPolicy.requireValid(typed);if(!Arrays.equals(typed,confirmPassword.getPassword()))throw new IllegalArgumentException("Confirmation password does not match.");}
             if(!email.getText().isBlank() && !ContactValidation.validEmail(email.getText().trim()))
                 throw new IllegalArgumentException("Please enter a valid recovery email.");
             // Social accounts have a strong random local password; no implicit account linking by email.
@@ -1059,10 +1061,14 @@ public final class Main {
                 created=backend.registerOwnFarm(account,farm,provider,subject);
                 info("Your farm is ready. Welcome to SAKA-SMART!");
                 loginUser(backend.byId("users",created.get("id")));
-            }else{
+            }else if(mode==1){
                 if(farmChoice==null || farmChoice.getSelectedItem()==null)throw new IllegalArgumentException("Select a farm.");
                 created=backend.registerJoinFarm(account,((FarmOption)farmChoice.getSelectedItem()).id,provider,subject);
                 info("Membership request sent. The farm owner must approve your access.");
+            }else{
+                created=backend.registerCustomer(account,provider,subject);
+                info("Customer account created. Welcome to SAKA-SMART!");
+                loginUser(backend.byId("users",created.get("id")));
             }
         }catch(Exception ex){
             System.err.println("[SAKA-SMART] Farm registration failed:");
@@ -1183,8 +1189,9 @@ public final class Main {
         brandRow.setAlignmentX(Component.LEFT_ALIGNMENT);
         sidebar.add(brandRow);
         sidebar.add(spacer(18));
-        String[] routes=admin()?new String[]{"Dashboard","Users","Farm Profile","Learning Center","System Records","Backup & Restore","Settings"}:
-            "FARM_OWNER".equals(role())?new String[]{"Dashboard","Inventory","Calendar","Production Tracking","Accounting","Marketplace / Sales","Farm Members","Learning Center","Settings"}:
+        String[] routes="CUSTOMER".equals(role())?new String[]{"Customer Home","Explore Farms","My Cart","My Orders","Settings"}:
+            admin()?new String[]{"Dashboard","Users","Farm Profile","Learning Center","System Records","Backup & Restore","Settings"}:
+            "FARM_OWNER".equals(role())?new String[]{"Dashboard","Inventory","Calendar","Production Tracking","Accounting","Marketplace / Sales","Customer Orders","Farm Members","Learning Center","Settings"}:
             new String[]{"Dashboard","Inventory","Calendar","Production Tracking","Accounting","Marketplace / Sales","Learning Center","Settings"};
         for(String r:routes) {
             // Use the exact same Dashboard navigation controls on every route.
@@ -1207,7 +1214,7 @@ public final class Main {
         frame.setContentPane(root);renderPage();frame.revalidate();frame.repaint();
     }
     private static String symbol(String name){return switch(name){
-        case "Dashboard"->"⌂";case "Inventory"->"▣";case "Calendar"->"▦";case "Production Tracking"->"▥";
+        case "Customer Home"->"⌂";case "Explore Farms"->"♣";case "My Cart"->"▣";case "My Orders"->"▤";case "Customer Orders"->"▤";case "Dashboard"->"⌂";case "Inventory"->"▣";case "Calendar"->"▦";case "Production Tracking"->"▥";
         case "Accounting"->"₱";case "Marketplace / Sales"->"▤";case "Learning Center"->"▧";
         case "Users"->"♟";case "Farm Members"->"♟";case "Settings"->"⚙";case "Backup & Restore"->"↥";
         case "Farm Profile"->"♣";case "System Records"->"≡";default->"•";};}
@@ -1369,7 +1376,7 @@ private JComponent header() {
     // Count active alerts using the existing alert rules.
     int count = 0;
 
-    for (Map<String, String> r : rows("inventory")) {
+    if(!"CUSTOMER".equals(role()))for (Map<String, String> r : rows("inventory")) {
         if (Storage.num(r, "quantity")
                 <= Storage.num(r, "min_stock")) {
             count++;
@@ -1379,7 +1386,7 @@ private JComponent header() {
         }
     }
 
-    for (Map<String, String> r : rows("events")) {
+    if(!"CUSTOMER".equals(role()))for (Map<String, String> r : rows("events")) {
         if ("Upcoming".equals(v(r, "status"))
                 && v(r, "date").compareTo(today()) <= 0) {
             count++;
@@ -1497,6 +1504,7 @@ private JComponent header() {
     notificationsButton.getAccessibleContext()
         .setAccessibleName("Notifications");
 
+    notificationsButton.setEnabled(!"CUSTOMER".equals(role()));
     notificationsButton.addActionListener(
         e -> notifications()
     );
@@ -1541,10 +1549,32 @@ private JComponent header() {
     return top;
 }
 
+    /** Temporary customer landing page: deliberately no access to farm data or checkout. */
+    private JComponent customerHome(){
+        JPanel body=stack();
+        JPanel welcome=card(new BorderLayout(0,14));
+        pad(welcome,28,30,28,30);
+        welcome.add(label("Welcome to SAKA-SMART, "+username()+"!",25,true,DARK),BorderLayout.NORTH);
+        JPanel detail=pane(new GridLayout(0,1,0,13));
+        detail.add(label("Customer Account  |  Active",15,true,GREEN));
+        detail.add(label("Your buyer account is ready.",16,false,DARK));
+        detail.add(label("Marketplace shopping and order checkout are coming in the next implementation phase.",13,false,MUTED));
+        detail.add(label("Farm management data is not available to customer accounts.",13,false,MUTED));
+        welcome.add(detail,BorderLayout.CENTER);
+        addBlock(body,welcome,220);
+        return body;
+    }
     void renderPage(){
+        if("CUSTOMER".equals(role()) && !Set.of("Customer Home","Explore Farms","My Cart","My Orders","Settings").contains(route))
+            route="Customer Home";
         pageHolder.removeAll();
         JPanel body=pane(new BorderLayout());body.setBackground(BG);pad(body,20,23,28,23);
         JComponent content = switch(route){
+            case "Customer Home" -> new MarketBrowsePage(this,false);
+            case "Explore Farms" -> new MarketBrowsePage(this,true);
+            case "My Cart" -> commerceLauncher("My Shopping Cart", "View your saved products and proceed to checkout.", () -> CommerceUI.cart(frame,username()));
+            case "My Orders" -> commerceLauncher("My Orders", "Track and review your purchases from local farmers.", () -> CommerceUI.myOrders(frame,username()));
+            case "Customer Orders" -> new FarmOrdersPage(frame,username());
             case "Dashboard" -> new DashboardPage(this).build();
             case "Inventory" -> new InventoryPage(this).build();
             case "Calendar" -> new CalendarPage(this).build();
@@ -1562,6 +1592,17 @@ private JComponent header() {
         };
         body.add(content,BorderLayout.CENTER);pageHolder.add(body,BorderLayout.CENTER);
         pageHolder.revalidate();pageHolder.repaint();
+    }
+    private JComponent commerceLauncher(String title,String description,Runnable open){
+        JPanel view=pane(new BorderLayout(0,18));
+        JPanel content=card(new BorderLayout(0,17));pad(content,30,30,30,30);
+        content.add(label(title,25,true,DARK),BorderLayout.NORTH);
+        content.add(label(description,16,false,DARK),BorderLayout.CENTER);
+        JButton button=GlossyTheme.button("Open "+title,GREEN);
+        button.addActionListener(e->open.run());
+        JPanel actions=pane(new FlowLayout(FlowLayout.LEFT));actions.add(button);
+        content.add(actions,BorderLayout.SOUTH);
+        view.add(content,BorderLayout.NORTH);return view;
     }
     JPanel vertical(){JPanel p=pane(new GridBagLayout());p.setAlignmentX(Component.LEFT_ALIGNMENT);return p;}
     JPanel stack(){JPanel p=pane(null);p.setLayout(new BoxLayout(p,BoxLayout.Y_AXIS));return p;}

@@ -160,7 +160,7 @@ public final class DemoStorage implements Storage {
         throw new IllegalArgumentException("Request not found.");
     }
     @Override public synchronized boolean redeemPasswordReset(String username,String code,char[] password) throws Exception {
-        if(password==null || password.length<8)throw new IllegalArgumentException("Password must have at least 8 characters.");
+        PasswordPolicy.requireValid(password);
         Map<String,String> u=userByName(username);
         if(u==null || !"true".equalsIgnoreCase(u.get("active")))return false;
         List<Map<String,String>> all=state.rows.get("password_reset_requests");
@@ -221,12 +221,35 @@ public final class DemoStorage implements Storage {
     }
 
 
+    private static Map<String,String> publicFields(Map<String,String> source,String... keys){
+        Map<String,String> safe=new LinkedHashMap<>();
+        for(String k:keys)safe.put(k,source.getOrDefault(k,""));return safe;
+    }
+    @Override public synchronized List<Map<String,String>> publicMarketFarms() throws Exception {
+        List<Map<String,String>> list=new ArrayList<>();
+        for(Map<String,String> f:state.rows.getOrDefault("farms",List.of()))
+            if("true".equalsIgnoreCase(f.getOrDefault("market_published","false")))
+                list.add(publicFields(f,"id","name","location","crops","livestock","market_description","market_logo_url","market_banner_url"));
+        return list;
+    }
+    @Override public synchronized List<Map<String,String>> publicMarketProducts() throws Exception {
+        Set<String> visible=new HashSet<>();
+        for(Map<String,String> farm:publicMarketFarms())visible.add(farm.get("id"));
+        List<Map<String,String>> list=new ArrayList<>();
+        for(Map<String,String> item:state.rows.getOrDefault("inventory",List.of())){
+            if(!visible.contains(item.get("farm_id"))||!"HARVEST".equals(item.get("kind"))||
+               !"true".equalsIgnoreCase(item.getOrDefault("market_published","false"))||
+               Storage.num(item,"quantity")<=0||Storage.num(item,"market_price")<=0)continue;
+            list.add(publicFields(item,"id","farm_id","name","category","quantity","unit","market_price","market_description","market_image_url"));
+        }
+        return list;
+    }
     @Override public synchronized List<Map<String,String>> publicFarms() {
         return all("farms").stream().map(r->Map.of("id",r.get("id"),"name",r.getOrDefault("name","Farm"))).toList();
     }
     private void validateNewAccount(Map<String,String> account,String provider,String subject){
         String name=account.getOrDefault("username","");
-        if(!name.matches("[A-Za-z0-9_.-]{3,40}"))throw new IllegalArgumentException("Username must be 3-40 letters, digits, dots, underscores or dashes.");
+        if(!name.matches("[\\p{L}\\p{N}._ -]{2,40}"))throw new IllegalArgumentException("Username must be 3-40 letters, digits, dots, underscores or dashes.");
         if(userByName(name)!=null)throw new IllegalArgumentException("Username already exists.");
         if(provider!=null && !provider.isBlank()){
             if(!Set.of("GOOGLE","FACEBOOK").contains(provider) || subject==null || subject.isBlank())throw new SecurityException("Invalid social identity.");
@@ -242,6 +265,14 @@ public final class DemoStorage implements Storage {
         Map<String,String> values=new HashMap<>(account);values.put("role","FARM_OWNER");values.put("active","true");values.put("farm_id",createdFarm.get("id"));
         Map<String,String> newUser=internalAdd("users",values);attachSocial(newUser.get("id"),provider,subject);
         persist();return new HashMap<>(newUser);
+    }
+    @Override public synchronized Map<String,String> registerCustomer(Map<String,String> account,String provider,String subject) throws Exception {
+        validateNewAccount(account,provider,subject);
+        Map<String,String> values=new HashMap<>(account);
+        values.put("role","CUSTOMER");values.put("active","true");values.put("farm_id","");
+        Map<String,String> created=internalAdd("users",values);
+        attachSocial(created.get("id"),provider,subject);
+        persist();return new HashMap<>(created);
     }
     @Override public synchronized Map<String,String> registerJoinFarm(Map<String,String> account,String farmId,String provider,String subject) throws Exception {
         validateNewAccount(account,provider,subject);

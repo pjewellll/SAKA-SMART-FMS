@@ -38,6 +38,15 @@ public final class PostgresStorage implements Storage {
             st.execute("ALTER TABLE logs ADD COLUMN IF NOT EXISTS farm_id BIGINT REFERENCES farms(id)");
             st.execute("ALTER TABLE farms ADD COLUMN IF NOT EXISTS latitude TEXT");
             st.execute("ALTER TABLE farms ADD COLUMN IF NOT EXISTS longitude TEXT");
+            // V13 public storefront columns. All listings default unpublished.
+            st.execute("ALTER TABLE farms ADD COLUMN IF NOT EXISTS market_description TEXT");
+            st.execute("ALTER TABLE farms ADD COLUMN IF NOT EXISTS market_logo_url TEXT");
+            st.execute("ALTER TABLE farms ADD COLUMN IF NOT EXISTS market_banner_url TEXT");
+            st.execute("ALTER TABLE farms ADD COLUMN IF NOT EXISTS market_published BOOLEAN NOT NULL DEFAULT FALSE");
+            st.execute("ALTER TABLE inventory ADD COLUMN IF NOT EXISTS market_price NUMERIC(16,2) NOT NULL DEFAULT 0");
+            st.execute("ALTER TABLE inventory ADD COLUMN IF NOT EXISTS market_published BOOLEAN NOT NULL DEFAULT FALSE");
+            st.execute("ALTER TABLE inventory ADD COLUMN IF NOT EXISTS market_description TEXT");
+            st.execute("ALTER TABLE inventory ADD COLUMN IF NOT EXISTS market_image_url TEXT");
             st.execute("CREATE UNIQUE INDEX IF NOT EXISTS saka_social_subject_uniq ON social_identities(provider,subject)");
         }
         try(Statement st=c.createStatement();ResultSet rs=st.executeQuery("SELECT COUNT(*) FROM users")){
@@ -217,7 +226,7 @@ public final class PostgresStorage implements Storage {
         }
     }
     @Override public boolean redeemPasswordReset(String username,String code,char[] password) throws Exception {
-        if(password==null || password.length<8)throw new IllegalArgumentException("Password must have at least 8 characters.");
+        PasswordPolicy.requireValid(password);
         try(Connection c=open()){
             c.setAutoCommit(false);
             try{
@@ -335,6 +344,29 @@ public final class PostgresStorage implements Storage {
     }
 
 
+    // Explicit public projections: never return supplier, costs, farm owner contacts or staff.
+    private List<Map<String,String>> publicRows(String sql,String... fields) throws Exception {
+        List<Map<String,String>> result=new ArrayList<>();
+        try(Connection c=open();PreparedStatement ps=c.prepareStatement(sql);ResultSet rs=ps.executeQuery()){
+            while(rs.next()){
+                Map<String,String> row=new LinkedHashMap<>();
+                for(String field:fields)row.put(field,Objects.toString(rs.getString(field),""));
+                result.add(row);
+            }
+        }
+        return result;
+    }
+    @Override public List<Map<String,String>> publicMarketFarms() throws Exception {
+        return publicRows("SELECT id,name,location,crops,livestock,market_description,market_logo_url,market_banner_url " +
+            "FROM farms WHERE market_published=TRUE ORDER BY name", "id","name","location","crops","livestock",
+            "market_description","market_logo_url","market_banner_url");
+    }
+    @Override public List<Map<String,String>> publicMarketProducts() throws Exception {
+        return publicRows("SELECT i.id,i.farm_id,i.name,i.category,i.quantity,i.unit,i.market_price,i.market_description,i.market_image_url " +
+            "FROM inventory i JOIN farms f ON f.id=i.farm_id WHERE f.market_published=TRUE " +
+            "AND i.kind='HARVEST' AND i.market_published=TRUE AND i.quantity>0 AND i.market_price>0 ORDER BY i.name",
+            "id","farm_id","name","category","quantity","unit","market_price","market_description","market_image_url");
+    }
     @Override public List<Map<String,String>> publicFarms() throws Exception {
         List<Map<String,String>> result=new ArrayList<>();
         try(Connection c=open();PreparedStatement p=c.prepareStatement("SELECT id,name FROM farms ORDER BY name");ResultSet r=p.executeQuery()) {
@@ -343,7 +375,7 @@ public final class PostgresStorage implements Storage {
         return result;
     }
     private static void uniqueUsername(Connection c,String name) throws Exception {
-        if(name==null || !name.matches("[A-Za-z0-9_.-]{3,40}"))
+        if(name==null || !name.matches("[\\p{L}\\p{N}._ -]{2,40}"))
             throw new IllegalArgumentException("Username must be 3-40 letters, digits, dots, underscores or dashes.");
         try(PreparedStatement p=c.prepareStatement("SELECT 1 FROM users WHERE LOWER(username)=LOWER(?)")){
             p.setString(1,name);try(ResultSet r=p.executeQuery()){
@@ -369,6 +401,20 @@ public final class PostgresStorage implements Storage {
                 linkSocial(c,created.get("id"),provider,subject);
                 c.commit();return created;
             }catch(Exception e){c.rollback();throw e;}
+        }
+    }
+    @Override public Map<String,String> registerCustomer(Map<String,String> account,String provider,String subject) throws Exception {
+        try(Connection c=open()){
+            c.setAutoCommit(false);
+            try{
+                uniqueUsername(c,account.get("username"));
+                Map<String,String> values=new HashMap<>(account);
+                values.put("role","CUSTOMER");values.put("active","true");
+                values.remove("farm_id");
+                Map<String,String> created=doAdd(c,"users",values);
+                linkSocial(c,created.get("id"),provider,subject);
+                c.commit();return created;
+            }catch(Exception ex){c.rollback();throw ex;}
         }
     }
     @Override public Map<String,String> registerJoinFarm(Map<String,String> account,String farmId,String provider,String subject) throws Exception {

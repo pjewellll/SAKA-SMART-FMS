@@ -1,12 +1,12 @@
 package com.sakasmart;
 
-import javax.swing.*;
-import javax.swing.border.EmptyBorder;
+import static com.sakasmart.Main.*;
 import java.awt.*;
 import java.awt.geom.RoundRectangle2D;
 import java.util.List;
 import java.util.Map;
-import static com.sakasmart.Main.*;
+import javax.swing.*;
+import javax.swing.border.EmptyBorder;
 
 /**
  * SAKA-SMART Farm Profile page.

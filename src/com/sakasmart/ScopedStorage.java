@@ -15,7 +15,8 @@ final class ScopedStorage implements Storage {
         farmId=user.getOrDefault("farm_id","");role=user.getOrDefault("role","");
         systemAdmin="SYSTEM_ADMIN".equals(role);
         if(!"true".equalsIgnoreCase(user.getOrDefault("active","false")))throw new SecurityException("Inactive account.");
-        if(!systemAdmin && (!STAFF_ROLES.contains(role)||farmId.isBlank()))throw new SecurityException("No authorized farm membership.");
+        if("CUSTOMER".equals(role)){if(!farmId.isBlank())throw new SecurityException("Customer cannot belong to a farm.");}
+        else if(!systemAdmin && (!STAFF_ROLES.contains(role)||farmId.isBlank()))throw new SecurityException("No authorized farm membership.");
     }
     private void require(boolean allowed){if(!allowed)throw new SecurityException("You do not have permission for this farm or operation.");}
     private boolean mayEdit(String table){
@@ -34,6 +35,16 @@ final class ScopedStorage implements Storage {
         return r;
     }
     @Override public List<Map<String,String>> all(String table) throws Exception {
+        if("CUSTOMER".equals(role)){
+            if("articles".equals(table))return delegate.all("articles");
+            if("users".equals(table)){
+                Map<String,String> mine=delegate.byId("users",userId);
+                if(mine==null)throw new SecurityException("Customer account missing.");
+                Map<String,String> safe=new HashMap<>(mine);
+                safe.remove("password_hash");return List.of(safe);
+            }
+            throw new SecurityException("Customers cannot access private farm records.");
+        }
         if("password_reset_requests".equals(table)||"social_identities".equals(table)||"phone_login_codes".equals(table)){
             require(systemAdmin && "password_reset_requests".equals(table));
         }
@@ -56,6 +67,7 @@ final class ScopedStorage implements Storage {
         throw new SecurityException("Unauthorized data category.");
     }
     @Override public Map<String,String> add(String table,Map<String,String> values) throws Exception {
+        require(!"CUSTOMER".equals(role));
         require(!Set.of("password_reset_requests","social_identities","phone_login_codes","users").contains(table));
         if("articles".equals(table)){require(systemAdmin);return delegate.add(table,values);}
         require("logs".equals(table)|| (mayEdit(table) && !"farms".equals(table)));
@@ -68,6 +80,7 @@ final class ScopedStorage implements Storage {
         return delegate.add(table,scoped);
     }
     @Override public void edit(String table,String id,Map<String,String> values) throws Exception {
+        if("CUSTOMER".equals(role) && !"users".equals(table))throw new SecurityException("Customers cannot edit farm records.");
         if("users".equals(table)){
             if(systemAdmin){delegate.edit(table,id,values);return;}
             require(userId.equals(id));
@@ -88,6 +101,7 @@ final class ScopedStorage implements Storage {
         delegate.edit(table,id,scoped);
     }
     @Override public void remove(String table,String id) throws Exception {
+        require(!"CUSTOMER".equals(role));
         if("articles".equals(table)){require(systemAdmin);delegate.remove(table,id);return;}
         require(mayEdit(table) && !Set.of("users","farms","logs","password_reset_requests").contains(table));
         checkedRecord(table,id);delegate.remove(table,id);
@@ -96,6 +110,8 @@ final class ScopedStorage implements Storage {
         require(mayEdit("sales"));checkedRecord("inventory",itemId);
         delegate.sell(itemId,buyer,qty,price,date,systemAdmin?actor:username);
     }
+    @Override public List<Map<String,String>> publicMarketFarms() throws Exception{return delegate.publicMarketFarms();}
+    @Override public List<Map<String,String>> publicMarketProducts() throws Exception{return delegate.publicMarketProducts();}
     @Override public List<Map<String,String>> publicFarms() throws Exception{return delegate.publicFarms();}
     @Override public void decideMembership(String owner,String member,String targetRole,boolean approve) throws Exception {
         require("FARM_OWNER".equals(role)&&userId.equals(owner));
@@ -103,6 +119,7 @@ final class ScopedStorage implements Storage {
     }
     @Override public Map<String,String> registerOwnFarm(Map<String,String> a,Map<String,String> f,String p,String s) {throw new SecurityException("Log out to register.");}
     @Override public Map<String,String> registerJoinFarm(Map<String,String> a,String f,String p,String s){throw new SecurityException("Log out to register.");}
+    @Override public Map<String,String> registerCustomer(Map<String,String> a,String p,String s){throw new SecurityException("Log out to register.");}
     @Override public Map<String,String> bySocialIdentity(String p,String s){throw new SecurityException("Authentication operation requires login screen.");}
     @Override public void requestPasswordReset(String username) throws Exception {throw new SecurityException("Use the recovery form.");}
     @Override public String approvePasswordReset(String id,String administrator) throws Exception {require(systemAdmin);return delegate.approvePasswordReset(id,administrator);}
