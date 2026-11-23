@@ -84,7 +84,7 @@ final class ScopedStorage implements Storage {
         if("users".equals(table)){
             if(systemAdmin){delegate.edit(table,id,values);return;}
             require(userId.equals(id));
-            require(Set.of("password_hash","email","email_verified","phone","phone_verified").containsAll(values.keySet()));
+            require(Set.of("password_hash","email","email_verified","phone","phone_verified","full_name").containsAll(values.keySet()));
             Map<String,String> safe=new HashMap<>(values);
             // Users can change contacts but CANNOT self-verify them.
             Map<String,String> existing=delegate.byId("users",id);

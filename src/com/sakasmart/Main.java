@@ -1167,7 +1167,7 @@ public final class Main {
     }
 
     // -------------------------------- MAIN SHELL --------------------------------
-    private void showShell(){
+    void showShell(){
         stopLoginAnimation(); // no background animation after entering the dashboard
         frame.setTitle("SAKA-SMART | Farm Management System");
         JPanel root=new JPanel(new BorderLayout());root.setBackground(BG);
@@ -1278,10 +1278,11 @@ private JComponent header() {
     JPanel left = pane(new BorderLayout(0, 3));
     JPanel headings = pane(new GridLayout(2, 1, 0, 0));
 
-    headings.add(label(
-        "SAKA-SMART  /  FARM MANAGEMENT SYSTEM",
-        10, true, new Color(49, 128, 76)
-    ));
+    // SAKA HEADER POLISH V1: bold product name, regular system descriptor.
+    JPanel brandLine = pane(new FlowLayout(FlowLayout.LEFT, 0, 0));
+    brandLine.add(label("SAKA-SMART", 18, true, new Color(13, 110, 59)));
+    brandLine.add(label(": FARM MANAGEMENT SYSTEM", 15, false, new Color(44, 124, 77)));
+    headings.add(brandLine);
 
     headings.add(label(
         admin()
@@ -1296,8 +1297,7 @@ private JComponent header() {
     left.add(label(
         admin()
             ? "Manage users, records, and system settings."
-            : "Smart farms. Brighter tomorrows.",
-        12, false, subGreen
+            : "Smart farms. Brighter tomorrow.", 15, true, new Color(34, 114, 70)
     ), BorderLayout.SOUTH);
 
     top.add(left, BorderLayout.WEST);
@@ -1311,67 +1311,15 @@ private JComponent header() {
         fullName = username();
     }
 
-    JPanel profile = pane(new BorderLayout(9, 0));
-
-    JComponent avatar = new JComponent() {
-        @Override
-        protected void paintComponent(Graphics original) {
-            Graphics2D g = (Graphics2D) original.create();
-            g.setRenderingHint(
-                RenderingHints.KEY_ANTIALIASING,
-                RenderingHints.VALUE_ANTIALIAS_ON
-            );
-
-            int w = getWidth();
-            int h = getHeight();
-
-            g.setPaint(new GradientPaint(
-                0, 0, new Color(47, 160, 95),
-                0, h, new Color(7, 91, 53)
-            ));
-            g.fillOval(1, 1, w - 2, h - 2);
-
-            g.setColor(new Color(255, 255, 255, 185));
-            g.setStroke(new BasicStroke(1.3f));
-            g.drawOval(2, 2, w - 5, h - 5);
-
-            // White human silhouette.
-            g.setColor(Color.WHITE);
-            g.fillOval(w / 2 - 6, h / 2 - 11, 12, 12);
-            g.fillRoundRect(
-                w / 2 - 13,
-                h / 2 + 3,
-                26,
-                15,
-                16,
-                16
-            );
-
-
-            g.dispose();
-        }
-    };
-
-    avatar.setPreferredSize(new Dimension(42, 42));
-    avatar.setToolTipText("User profile");
-
-    profile.add(avatar, BorderLayout.EAST);
-
-    JPanel userInfo = pane(new GridLayout(2, 1, 0, 1));
-
-    JLabel nameLabel = label(
-        fullName, 13, true, titleGreen
-    );
-    nameLabel.setPreferredSize(new Dimension(155, 20));
+    // HEADER PROFILE V2: clickable, larger profile avatar and readable account details.
+    JPanel profile = pane(new FlowLayout(FlowLayout.RIGHT, 9, 0));
+    JPanel userInfo = pane(new GridLayout(2, 1, 0, 3));
+    JLabel nameLabel = label(fullName, 16, true, titleGreen);
     nameLabel.setToolTipText(fullName);
-
     userInfo.add(nameLabel);
-    userInfo.add(label(
-        role().replace('_', ' '),
-        11, false, subGreen
-    ));
-
-    profile.add(userInfo, BorderLayout.WEST);
+    userInfo.add(label(role().replace('_', ' '), 12, false, subGreen));
+    profile.add(userInfo);
+    profile.add(ProfileEditor.avatarButton(this, user, 58));
 
     // Count active alerts using the existing alert rules.
     int count = 0;
@@ -1404,6 +1352,17 @@ private JComponent header() {
             if ("PENDING".equals(v(r, "status"))) {
                 count++;
             }
+        }
+    }
+
+    // Also count incoming checkout orders awaiting the owner's action.
+    if ("FARM_OWNER".equals(role()) && "postgres".equalsIgnoreCase(System.getenv("SAKA_MODE"))) {
+        try {
+            for (CommerceService.Order order : new CommerceService().orders(username(), true)) {
+                if ("PENDING".equalsIgnoreCase(order.status())) count++;
+            }
+        } catch (Exception ex) {
+            System.err.println("Marketplace alert badge lookup failed: " + ex.getMessage());
         }
     }
 
@@ -1508,10 +1467,8 @@ private JComponent header() {
     notificationsButton.addActionListener(
         e -> notifications()
     );
+    // Refresh button intentionally removed from top header.
 
-    // Preserve the existing Refresh action.
-    JButton refresh = dashboardButton("Refresh");
-    refresh.addActionListener(e -> renderPage());
 
     // Preserve the existing secure logout flow.
     JButton logout = dashboardButton("Log Out");
@@ -1527,7 +1484,7 @@ private JComponent header() {
     );
 
     toolbar.add(notificationsButton);
-        toolbar.add(refresh);
+
         toolbar.add(logout);
         toolbar.add(profile);
 
@@ -1787,24 +1744,93 @@ private JComponent header() {
         }catch(Exception ex){error(ex);}
     }
     private void notifications(){
-        List<String> notes=new ArrayList<>();
-        for(Map<String,String> r:rows("inventory")){
-            if(Storage.num(r,"quantity")<=Storage.num(r,"min_stock"))notes.add("Low stock: "+v(r,"name")+" ("+v(r,"quantity")+" "+v(r,"unit")+")");
-            if(isExpiring(r))notes.add("Expiring soon: "+v(r,"name")+" ("+v(r,"expiry_date")+")");
+        List<NotificationDrawer.Alert> alerts = new ArrayList<>();
+        for (Map<String,String> r : rows("inventory")) {
+            String item = v(r, "name");
+            String id = v(r, "id");
+            if (id.isBlank()) id = item;
+            if (Storage.num(r, "quantity") <= Storage.num(r, "min_stock")) {
+                alerts.add(new NotificationDrawer.Alert(
+                    "inventory:low:" + id,
+                    NotificationDrawer.Category.INVENTORY,
+                    "Low stock: " + item,
+                    v(r, "quantity") + " " + v(r, "unit") + " remaining",
+                    null, "Inventory"));
+            }
+            if (isExpiring(r)) {
+                java.time.LocalDate date = notificationDate(v(r, "expiry_date"));
+                alerts.add(new NotificationDrawer.Alert(
+                    "inventory:expiry:" + id + ":" + v(r, "expiry_date"),
+                    NotificationDrawer.Category.INVENTORY,
+                    (date != null && date.isBefore(java.time.LocalDate.now()) ? "Expired: " : "Expiring soon: ") + item,
+                    "Expiry date: " + v(r, "expiry_date"),
+                    date, "Inventory"));
+            }
         }
-        for(Map<String,String> r:rows("events")){
-            if("Upcoming".equals(v(r,"status"))&&v(r,"date").compareTo(today())<=0)notes.add("Task due/overdue: "+v(r,"title")+" ("+v(r,"date")+")");
+        for (Map<String,String> r : rows("events")) {
+            if ("Upcoming".equals(v(r, "status")) && v(r, "date").compareTo(today()) <= 0) {
+                String id = v(r,"id");
+                if(id.isBlank()) id = v(r,"title");
+                alerts.add(new NotificationDrawer.Alert(
+                    "calendar:due:" + id + ":" + v(r,"date"),
+                    NotificationDrawer.Category.TASKS,
+                    "Task due/overdue: " + v(r,"title"),
+                    "Scheduled: " + v(r,"date"),
+                    notificationDate(v(r,"date")), "Calendar"));
+            }
         }
-        if(admin()){
-            for(Map<String,String> r:rows("users"))if(!"true".equalsIgnoreCase(v(r,"active")))notes.add("Approval needed: "+v(r,"username"));
-            for(Map<String,String> r:rows("password_reset_requests"))if("PENDING".equals(v(r,"status")))
-                notes.add("Password assistance requested: "+v(r,"username"));
+        if (admin()) {
+            for (Map<String,String> r : rows("users")) {
+                if (!"true".equalsIgnoreCase(v(r, "active"))) {
+                    alerts.add(new NotificationDrawer.Alert(
+                        "members:approval:" + v(r,"id"),
+                        NotificationDrawer.Category.MEMBERS,
+                        "Approval needed: " + v(r,"username"),
+                        "Account is awaiting review",
+                        null, "Users"));
+                }
+            }
+            for (Map<String,String> r : rows("password_reset_requests")) {
+                if ("PENDING".equals(v(r, "status"))) {
+                    alerts.add(new NotificationDrawer.Alert(
+                        "members:password:" + v(r,"id"),
+                        NotificationDrawer.Category.MEMBERS,
+                        "Password assistance requested",
+                        "Request from: " + v(r,"username"),
+                        null, "Users"));
+                }
+            }
         }
-        if(notes.isEmpty()){info("No current alerts.");return;}
-        JTextArea t=new JTextArea(String.join("\n\n",notes));t.setFont(FONT);t.setEditable(false);t.setWrapStyleWord(true);t.setLineWrap(true);
-        JScrollPane sp=new JScrollPane(t);sp.setPreferredSize(new Dimension(520,310));StyledDialogs.showMessageDialog(frame,sp,notes.size()+" Alerts",JOptionPane.INFORMATION_MESSAGE);
+        // New marketplace checkouts: farm-scoped pending orders only.
+        // CommerceService.orders(username,true) validates the authenticated owner farm.
+        if ("FARM_OWNER".equals(role()) && "postgres".equalsIgnoreCase(System.getenv("SAKA_MODE"))) {
+            try {
+                for (CommerceService.Order order : new CommerceService().orders(username(), true)) {
+                    if (!"PENDING".equalsIgnoreCase(order.status())) continue;
+                    // The original order timestamp is retained for date grouping.
+                    String placed = order.placed() == null ? "" : order.placed();
+                    java.time.LocalDate orderDate = notificationDate(
+                        placed.length() >= 10 ? placed.substring(0,10) : placed);
+                    alerts.add(new NotificationDrawer.Alert(
+                        "marketplace:pending-order:" + order.id(),
+                        NotificationDrawer.Category.MARKETPLACE,
+                        "New customer order #" + order.id(),
+                        order.buyer() + " placed a " + order.method().toLowerCase(java.util.Locale.ROOT)
+                            + " order. Total: PHP " + order.total(),
+                        orderDate, "Customer Orders"));
+                }
+            } catch (Exception ex) {
+                // Inventory and calendar alerts must continue working when commerce is unavailable.
+                System.err.println("Marketplace notification lookup failed: " + ex.getMessage());
+            }
+        }
+        NotificationDrawer.show(frame, alerts, v(user,"id"), this::go);
     }
 
+    private static java.time.LocalDate notificationDate(String raw) {
+        try { return java.time.LocalDate.parse(raw); }
+        catch (Exception ignored) { return null; }
+    }
     // -------------------------------- CUSTOM GRAPHICS --------------------------------
     /** Custom landscape illustration; no internet and no extra image libraries required. */
     private static class FarmBanner extends JPanel {

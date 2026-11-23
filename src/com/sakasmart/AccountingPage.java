@@ -123,6 +123,7 @@ final class AccountingPage extends PageBase {
             "Search transaction records..."
         );
 
+        RecordsTablePolish.apply(table, "transactions");
         addBlock(
             p,
             section(

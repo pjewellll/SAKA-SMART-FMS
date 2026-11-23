@@ -29,6 +29,7 @@ final class ProductionPage extends PageBase {
         for(Map<String,String> r:logs)chart.put(v(r,"item")+" (#"+v(r,"id")+")",Storage.num(r,"target")<=0?0:100*Storage.num(r,"actual")/Storage.num(r,"target"));
         addBlock(p,section("Target vs Actual Output","Percent of target achieved per production record (units are not added together)",new ChartPanel(chart,"%")),278);
         TableParts table=tableView("production",logs,List.of("id","item","kind","target","actual","unit","date","notes"),"Search production logs...");
+        RecordsTablePolish.apply(table, "production");
         addBlock(p,section("Crop & Livestock Production Logs","Actual output and targets",tableAndActions("production",table,Map.of("kind","CROP","date",today(),"farm_id","1","target","0","actual","0"))),382);
         return p;
     }
