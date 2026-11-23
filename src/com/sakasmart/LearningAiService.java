@@ -54,7 +54,7 @@ final class LearningAiService {
             throw new IllegalArgumentException("SAKA_AI_ENDPOINT must use HTTPS (or HTTP for localhost testing).");
         Map<String,Object> request=new LinkedHashMap<>();
         request.put("message",question);request.put("language",language);request.put("history",turns(previous));
-        HttpRequest http=HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(40))
+        HttpRequest http=HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(90))
             .header("Content-Type","application/json")
             .POST(HttpRequest.BodyPublishers.ofString(Json.write(request))).build();
         HttpResponse<String> response=client().send(http,HttpResponse.BodyHandlers.ofString());
@@ -83,8 +83,8 @@ final class LearningAiService {
         }
         contents.add(Map.of("role","user","parts",List.of(Map.of("text",question))));
         request.put("contents",contents);
-        request.put("generationConfig",Map.of("maxOutputTokens",1100,"temperature",0.35));
-        HttpRequest http=HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(40))
+        request.put("generationConfig",Map.of("maxOutputTokens",4096,"temperature",0.35));
+        HttpRequest http=HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(90))
             .header("Content-Type","application/json")
             .header("x-goog-api-key",key)
             .POST(HttpRequest.BodyPublishers.ofString(Json.write(request))).build();
